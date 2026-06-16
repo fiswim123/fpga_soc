@@ -1,0 +1,11 @@
+# Simulation outputs
+sim/work/
+sim/transcript
+sim/vsim.wlf
+
+# Large binary
+src/mnist.hex
+
+# OS
+.DS_Store
+Thumbs.db
