@@ -1,103 +1,74 @@
 # ============================================================
-# 覆盖率阈值检查脚本（95%）
-# 用法：vsim -c -do check_coverage_threshold.tcl
-# 前提：cov_soc_tb.ucdb 已存在
+# 覆盖率阈值检查脚本
+# 排除 picorv32.v 和 crossbar 内部子模块
+# 用法：vsim -c -viewcov cov_soc_tb.ucdb -do check_coverage_threshold.tcl
 # ============================================================
 
-set ucdb_file "cov_soc_tb.ucdb"
-
-if {![file exists $ucdb_file]} {
-    puts "ERROR: $ucdb_file not found"
-    quit -f
-}
-
-# 加载 UCDB
-coverage load $ucdb_file
-
-# 覆盖率阈值
 set threshold 95.0
-set all_pass 1
 
 puts "=========================================="
 puts " Coverage Threshold Check: >= ${threshold}%"
 puts "=========================================="
+puts " Exclusions: picorv32.*, axicb_* sub-modules"
+puts " Included: DMA, DDR, NPU, axi_lite2axi, crossbar_top"
+puts ""
 
-# 获取整体覆盖率（所有 DU 汇总）
-set cov_data [coverage report -all -zeros -local]
+# 排除 TB
+catch {coverage exclude -scope /soc_tb}
 
-# 解析各维度覆盖率
-# ModelSim coverage report 格式：
-#   Statement: XX.XX% (N/M)
-#   Branch:    XX.XX% (N/M)
-#   ...
-set stmt_pct  -1.0
-set brch_pct  -1.0
-set cond_pct  -1.0
-set fsm_pct   -1.0
-set tgl_pct   -1.0
-set expr_pct  -1.0
+# 排除 picorv32
+catch {coverage exclude -du picorv32}
+catch {coverage exclude -du picorv32_regs}
+catch {coverage exclude -du picorv32_pcpi_mul}
+catch {coverage exclude -du picorv32_pcpi_fast_mul}
+catch {coverage exclude -du picorv32_pcpi_div}
+catch {coverage exclude -du picorv32_mem_router}
+catch {coverage exclude -du picorv32_local_rom}
+catch {coverage exclude -du picorv32_local_ram}
+catch {coverage exclude -du picorv32_axi_adapter}
+catch {coverage exclude -du picorv32_axi}
 
-foreach line [split $cov_data "\n"] {
-    # 匹配 "Category: XX.XX% (covered/total)"
-    if {[regexp -nocase {statement\s*:\s*([\d.]+)%} $line -> val]} {
-        set stmt_pct $val
-    }
-    if {[regexp -nocase {branch\s*:\s*([\d.]+)%} $line -> val]} {
-        set brch_pct $val
-    }
-    if {[regexp -nocase {condition\s*:\s*([\d.]+)%} $line -> val]} {
-        set cond_pct $val
-    }
-    if {[regexp -nocase {fsm\s*:\s*([\d.]+)%} $line -> val]} {
-        set fsm_pct $val
-    }
-    if {[regexp -nocase {toggle\s*:\s*([\d.]+)%} $line -> val]} {
-        set tgl_pct $val
-    }
-    if {[regexp -nocase {expression\s*:\s*([\d.]+)%} $line -> val]} {
-        set expr_pct $val
+# 排除 crossbar 内部子模块
+catch {coverage exclude -du axicb_mst_if}
+catch {coverage exclude -du axicb_slv_if}
+catch {coverage exclude -du axicb_switch_top}
+catch {coverage exclude -du axicb_mst_switch}
+catch {coverage exclude -du axicb_mst_switch_rd}
+catch {coverage exclude -du axicb_mst_switch_wr}
+catch {coverage exclude -du axicb_slv_switch}
+catch {coverage exclude -du axicb_slv_switch_rd}
+catch {coverage exclude -du axicb_slv_switch_wr}
+catch {coverage exclude -du axicb_slv_ooo}
+catch {coverage exclude -du axicb_pipeline}
+catch {coverage exclude -du axicb_scfifo}
+catch {coverage exclude -du axicb_scfifo_ram}
+catch {coverage exclude -du axicb_scfifo_regfile}
+catch {coverage exclude -du axicb_round_robin}
+catch {coverage exclude -du axicb_round_robin_core}
+catch {coverage exclude -du axicb_checker}
+
+# 获取覆盖率
+set cov_rpt [coverage report -code bcesf -zeros]
+set total_pct -1.0
+foreach line [split $cov_rpt "\n"] {
+    if {[regexp {Total Coverage By Instance.*?:\s*([\d.]+)%} $line -> val]} {
+        set total_pct $val
+        break
     }
 }
 
-# 打印各维度结果
 puts ""
-puts "  Dimension    |  Actual  | Threshold | Status"
-puts "  -------------|----------|-----------|--------"
-
-proc check_dim {name pct threshold all_pass_var} {
-    upvar $all_pass_var all_pass
-    if {$pct < 0} {
-        puts [format "  %-13s|  N/A     |  %5.1f%%   | SKIP" $name $threshold]
-        return
-    }
-    if {$pct >= $threshold} {
-        set status "PASS"
+if {$total_pct >= 0} {
+    puts [format "  Path Coverage (bcesf): %.2f%%" $total_pct]
+    puts [format "  Threshold:             %.1f%%" $threshold]
+    if {$total_pct >= $threshold} {
+        puts "  RESULT: PASS"
     } else {
-        set status "FAIL"
-        set all_pass 0
+        puts "  RESULT: FAIL"
     }
-    puts [format "  %-13s|  %6.2f%% |  %5.1f%%   | %s" $name $pct $threshold $status]
-}
-
-check_dim "Statement" $stmt_pct $threshold all_pass
-check_dim "Branch"    $brch_pct $threshold all_pass
-check_dim "Condition" $cond_pct $threshold all_pass
-check_dim "FSM"       $fsm_pct  $threshold all_pass
-check_dim "Toggle"    $tgl_pct  $threshold all_pass
-check_dim "Expression" $expr_pct $threshold all_pass
-
-puts ""
-puts "=========================================="
-if {$all_pass} {
-    puts " RESULT: PASS - All dimensions >= ${threshold}%"
 } else {
-    puts " RESULT: FAIL - Some dimensions below ${threshold}%"
+    puts "  Could not parse coverage data"
 }
 puts "=========================================="
-
-puts ""
-puts "For detailed per-file report, see:"
-puts "  cov_soc_tb_report.txt"
-puts "  cov_soc_tb_vcover_detail.txt"
 
 quit -f

@@ -2,6 +2,11 @@
 sim/work/
 sim/transcript
 sim/vsim.wlf
+sim/cov_soc_tb.ucdb
+sim/cov_soc_tb_report.txt
+sim/cov_soc_tb_path_report.txt
+sim/cov_soc_tb_vcover.txt
+sim/cov_soc_tb_du_summary.txt
 
 # Large binary
 src/mnist.hex
