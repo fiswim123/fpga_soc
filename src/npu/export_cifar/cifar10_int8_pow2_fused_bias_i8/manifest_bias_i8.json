@@ -1,0 +1,183 @@
+{
+  "model": "TinyCIFAR10_5x5_int8_pow2_bn_fused",
+  "source_checkpoint": "checkpoint/tiny_cifar10_5x5.pth",
+  "checkpoint_meta": {
+    "best_acc": 74.17,
+    "epoch": 98,
+    "model_name": "TinyCIFAR10_5x5",
+    "state_dict_key": "model"
+  },
+  "quant_mode": "signed_int8_pow2_shift_only",
+  "input_preprocess": {
+    "layout": "NCHW_RGB",
+    "shape": [
+      3,
+      32,
+      32
+    ],
+    "mean": [
+      0.4914,
+      0.4822,
+      0.4465
+    ],
+    "std": [
+      0.2023,
+      0.1994,
+      0.201
+    ],
+    "quant": "q = clamp(round(((pixel/255 - mean) / std) * input_scale), -127, 127)"
+  },
+  "pool": {
+    "type": "maxpool2x2",
+    "after": [
+      "conv1",
+      "conv2"
+    ]
+  },
+  "gap": {
+    "type": "avg_8x8",
+    "input_scale_name": "conv2",
+    "output_scale_name": "conv2"
+  },
+  "scales": {
+    "input": {
+      "scale": 32.0,
+      "exp": 5
+    },
+    "conv1": {
+      "scale": 64.0,
+      "exp": 6
+    },
+    "conv2": {
+      "scale": 16.0,
+      "exp": 4
+    },
+    "logits": {
+      "scale": 8.0,
+      "exp": 3
+    }
+  },
+  "layers": [
+    {
+      "name": "conv1",
+      "source_weight": "features.0.weight",
+      "source_bias": "features.0.bias",
+      "weight_file": "conv1_weight_i8.memh",
+      "bias_file": "conv1_bias_i8.memh",
+      "weight_shape": [
+        32,
+        3,
+        5,
+        5
+      ],
+      "bias_shape": [
+        32
+      ],
+      "weight_scale": 256.0,
+      "weight_scale_exp": 8,
+      "input_scale_name": "input",
+      "output_scale_name": "conv1",
+      "requant_shift": 7,
+      "requant_mul": 1,
+      "relu": true,
+      "bias_domain": "int8_output",
+      "postprocess": "q_out = clamp((acc >> shift) + bias_i8, -128, 127); left shift if shift < 0"
+    },
+    {
+      "name": "conv2",
+      "source_weight": "features.4.weight",
+      "source_bias": "features.4.bias",
+      "weight_file": "conv2_weight_i8.memh",
+      "bias_file": "conv2_bias_i8.memh",
+      "weight_shape": [
+        64,
+        32,
+        5,
+        5
+      ],
+      "bias_shape": [
+        64
+      ],
+      "weight_scale": 64.0,
+      "weight_scale_exp": 6,
+      "input_scale_name": "conv1",
+      "output_scale_name": "conv2",
+      "requant_shift": 8,
+      "requant_mul": 1,
+      "relu": true,
+      "bias_domain": "int8_output",
+      "postprocess": "q_out = clamp((acc >> shift) + bias_i8, -128, 127); left shift if shift < 0"
+    },
+    {
+      "name": "fc",
+      "source_weight": "classifier.2.weight",
+      "source_bias": "classifier.2.bias",
+      "weight_file": "fc_weight_i8.memh",
+      "bias_file": "fc_bias_i8.memh",
+      "weight_shape": [
+        10,
+        64
+      ],
+      "bias_shape": [
+        10
+      ],
+      "weight_scale": 64.0,
+      "weight_scale_exp": 6,
+      "input_scale_name": "conv2",
+      "output_scale_name": "logits",
+      "requant_shift": 7,
+      "requant_mul": 1,
+      "relu": false,
+      "bias_domain": "int8_output",
+      "postprocess": "q_out = clamp((acc >> shift) + bias_i8, -128, 127); left shift if shift < 0"
+    }
+  ],
+  "source_manifest": "../cifar10_int8_pow2_fused/manifest.json",
+  "source_asset_dir": "../cifar10_int8_pow2_fused",
+  "source_checkpoint_for_bias_i8": "../checkpoint/tiny_cifar10_5x5.pth",
+  "checkpoint_meta_for_bias_i8": {
+    "best_acc": 74.17,
+    "epoch": 98,
+    "model_name": "TinyCIFAR10_5x5",
+    "state_dict_key": "model"
+  },
+  "bias_variant": "int8_output",
+  "bias_i8_stats": {
+    "conv1": {
+      "file": "conv1_bias_i8.memh",
+      "count": 32,
+      "output_scale_name": "conv1",
+      "output_scale": 64.0,
+      "sat_count": 0,
+      "max_abs": 61,
+      "raw_range": [
+        -61,
+        18
+      ]
+    },
+    "conv2": {
+      "file": "conv2_bias_i8.memh",
+      "count": 64,
+      "output_scale_name": "conv2",
+      "output_scale": 16.0,
+      "sat_count": 0,
+      "max_abs": 52,
+      "raw_range": [
+        -52,
+        34
+      ]
+    },
+    "fc": {
+      "file": "fc_bias_i8.memh",
+      "count": 10,
+      "output_scale_name": "logits",
+      "output_scale": 8.0,
+      "sat_count": 0,
+      "max_abs": 3,
+      "raw_range": [
+        -2,
+        3
+      ]
+    }
+  }
+}

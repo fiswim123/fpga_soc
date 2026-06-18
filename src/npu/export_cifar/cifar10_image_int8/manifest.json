@@ -1,0 +1,631 @@
+{
+  "source_asset_dir": "cifar10_int8_pow2_fused",
+  "source_manifest": "cifar10_int8_pow2_fused/manifest.json",
+  "input_scale": {
+    "scale": 32.0,
+    "exp": 5
+  },
+  "input_preprocess": {
+    "layout": "NCHW_RGB",
+    "shape": [
+      3,
+      32,
+      32
+    ],
+    "mean": [
+      0.4914,
+      0.4822,
+      0.4465
+    ],
+    "std": [
+      0.2023,
+      0.1994,
+      0.201
+    ],
+    "quant": "q = clamp(round(((pixel/255 - mean) / std) * input_scale), -127, 127)"
+  },
+  "image_count": 50,
+  "flat_order": "NCHW, then C-major CHW per image",
+  "images": [
+    {
+      "name": "test_00000",
+      "file": "test_00000_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 3
+    },
+    {
+      "name": "test_00001",
+      "file": "test_00001_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 8
+    },
+    {
+      "name": "test_00002",
+      "file": "test_00002_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 8
+    },
+    {
+      "name": "test_00003",
+      "file": "test_00003_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 0
+    },
+    {
+      "name": "test_00004",
+      "file": "test_00004_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00005",
+      "file": "test_00005_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00006",
+      "file": "test_00006_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 1
+    },
+    {
+      "name": "test_00007",
+      "file": "test_00007_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00008",
+      "file": "test_00008_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 3
+    },
+    {
+      "name": "test_00009",
+      "file": "test_00009_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 1
+    },
+    {
+      "name": "test_00010",
+      "file": "test_00010_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 0
+    },
+    {
+      "name": "test_00011",
+      "file": "test_00011_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00012",
+      "file": "test_00012_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 5
+    },
+    {
+      "name": "test_00013",
+      "file": "test_00013_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 7
+    },
+    {
+      "name": "test_00014",
+      "file": "test_00014_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00015",
+      "file": "test_00015_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 8
+    },
+    {
+      "name": "test_00016",
+      "file": "test_00016_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 5
+    },
+    {
+      "name": "test_00017",
+      "file": "test_00017_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 7
+    },
+    {
+      "name": "test_00018",
+      "file": "test_00018_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 8
+    },
+    {
+      "name": "test_00019",
+      "file": "test_00019_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00020",
+      "file": "test_00020_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 7
+    },
+    {
+      "name": "test_00021",
+      "file": "test_00021_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 0
+    },
+    {
+      "name": "test_00022",
+      "file": "test_00022_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 4
+    },
+    {
+      "name": "test_00023",
+      "file": "test_00023_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00024",
+      "file": "test_00024_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 5
+    },
+    {
+      "name": "test_00025",
+      "file": "test_00025_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 2
+    },
+    {
+      "name": "test_00026",
+      "file": "test_00026_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 4
+    },
+    {
+      "name": "test_00027",
+      "file": "test_00027_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 0
+    },
+    {
+      "name": "test_00028",
+      "file": "test_00028_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00029",
+      "file": "test_00029_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00030",
+      "file": "test_00030_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00031",
+      "file": "test_00031_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 5
+    },
+    {
+      "name": "test_00032",
+      "file": "test_00032_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 4
+    },
+    {
+      "name": "test_00033",
+      "file": "test_00033_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 5
+    },
+    {
+      "name": "test_00034",
+      "file": "test_00034_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00035",
+      "file": "test_00035_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 2
+    },
+    {
+      "name": "test_00036",
+      "file": "test_00036_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 4
+    },
+    {
+      "name": "test_00037",
+      "file": "test_00037_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 1
+    },
+    {
+      "name": "test_00038",
+      "file": "test_00038_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00039",
+      "file": "test_00039_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 5
+    },
+    {
+      "name": "test_00040",
+      "file": "test_00040_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 4
+    },
+    {
+      "name": "test_00041",
+      "file": "test_00041_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00042",
+      "file": "test_00042_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 5
+    },
+    {
+      "name": "test_00043",
+      "file": "test_00043_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    },
+    {
+      "name": "test_00044",
+      "file": "test_00044_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 0
+    },
+    {
+      "name": "test_00045",
+      "file": "test_00045_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00046",
+      "file": "test_00046_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 3
+    },
+    {
+      "name": "test_00047",
+      "file": "test_00047_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 9
+    },
+    {
+      "name": "test_00048",
+      "file": "test_00048_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 7
+    },
+    {
+      "name": "test_00049",
+      "file": "test_00049_nchw_i8.memh",
+      "shape": [
+        3,
+        32,
+        32
+      ],
+      "layout": "CHW_RGB",
+      "dtype": "int8_twos_complement_hex",
+      "label": 6
+    }
+  ]
+}

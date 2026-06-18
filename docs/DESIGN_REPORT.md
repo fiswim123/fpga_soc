@@ -1,3 +1,10 @@
+---
+title: "Habits"
+author: John Doe
+date: March 22, 2005
+output: word_document
+---
+
 # 智核融合·低耗强算 —— 基于CPU和NPU的异构处理器设计报告
 
 ---
@@ -311,11 +318,11 @@ $$P_{dynamic} = \alpha \times C \times V_{DD}^2 \times f$$
 | 地址范围 (Crossbar) | 大小 | 目标设备 | Crossbar端口 | 外部位宽 | 说明 |
 |----------------------|------|----------|-------------|----------|------|
 | 0x0000 – 0x0FFF | 4KB | **DDR** (程序/数据) | mst0 | 32-bit | 程序代码+栈+堆+全局数据 |
-| 0x1000 – 0x1FFF | 4KB | **NPU_LMEM** (NPU本地存储) | mst1 | 160-bit | 权重+输入/输出特征图 |
+| 0x1000 – 0x1FFF | 4KB | **NPU_LMEM** (NPU本地存储) | mst1 | 32-bit | 权重+输入/输出特征图 |
 | 0x2000 – 0x2FFF | 4KB | **DMA_REG** (DMA CSR) | mst2 | 32-bit | DMA控制寄存器访问 |
 | 0x3000 – 0x3FFF | 4KB | **NPU_REG** (NPU CSR) | mst3 | 32-bit | NPU控制寄存器访问 |
 
-> 注：Crossbar内部统一160-bit转发，CPU(32b)→DDR(32b)需经DATA_RATIO=5的位宽转换；DMA(160b)→NPU_LMEM(160b)同宽直通。
+> 注：Crossbar内部统一32-bit转发，CPU(32b)→DDR(32b)同宽直通；DMA(32b)→NPU_LMEM(32b)同宽直通。
 
 ### 2.2 模块划分
 
@@ -323,14 +330,14 @@ $$P_{dynamic} = \alpha \times C \times V_{DD}^2 \times f$$
 |----------|----------|----------|----------|
 | M1 | `soc_top` | 顶层集成，实例化所有子模块 | 外部IO |
 | M2 | `picorv32_axi_adapter` | PicoRV32 CPU核 + AXI4适配器 | AXI4 Master (32b) |
-| M3 | `axicb_crossbar_top` | 4×4 AXI4 Crossbar（160b内部总线，含位宽转换）| AXI4 Master/Slave |
-| M4 | `npu_top` | NPU顶层：含控制器+8计算核+数据通路 | AXI4 Master (160b) + AXI-Lite Slave |
+| M3 | `axicb_crossbar_top` | 4×4 AXI4 Crossbar（32b内部总线）| AXI4 Master/Slave |
+| M4 | `npu_top` | NPU顶层：含控制器+8计算核+数据通路 | AXI4 Master (32b) + AXI-Lite Slave |
 | M5 | `npu_core` ×8 | 单NPU计算核：16×16脉动阵列 | 内部接口 |
 | M6 | `pe_4x4` ×4×8 | 4×4 PE基础瓦片 | 内部接口 |
-| M7 | `dma_axi_top` | DMA控制器（7层分层设计，含CSR+FSM+Streamer+FIFO+AXI_IF）| AXI4 Master (160b) + AXI-Lite Slave |
+| M7 | `dma_axi_top` | DMA控制器（7层分层设计，含CSR+FSM+Streamer+FIFO+AXI_IF）| AXI4 Master (32b) + AXI-Lite Slave |
 | M8 | `dma_streamer` ×2 | 读/写流控引擎（Burst生成+4KB边界+非对齐）| 内部接口 |
-| M9 | `dma_axi_if` | AXI4 Master接口引擎（5通道+Outstanding+SVA）| AXI4 Master (160b) |
-| M10 | `dma_fifo` | 主数据FIFO（160b读写缓冲）| 内部接口 |
+| M9 | `dma_axi_if` | AXI4 Master接口引擎（5通道+Outstanding+SVA）| AXI4 Master (32b) |
+| M10 | `dma_fifo` | 主数据FIFO（32b读写缓冲）| 内部接口 |
 | M11 | `axicb_round_robin` | 优先级分层Round-Robin仲裁器（4级）| 内部接口 |
 | M12 | `axicb_slv_ooo` | 乱序完成管理器（per-ID FIFO）| 内部接口 |
 | M13 | `npu_sequencer` | NPU硬件层序列器（Conv/Pool/FC/Activation）| 内部接口 |
@@ -755,14 +762,14 @@ Step 4: 产生完成中断
 
 #### 3.3.1 总体架构
 
-本设计使用开源AXI4 Crossbar IP（`axicb_crossbar_top`），实现4 Master × 4 Slave全连接互连矩阵，内部数据宽度统一为160-bit，通过DATA_RATIO参数实现异构位宽（32b/160b）端口的自动适配。
+本设计使用开源AXI4 Crossbar IP（`axicb_crossbar_top`），实现4 Master × 4 Slave全连接互连矩阵，内部数据宽度统一为32-bit，所有端口同宽直通，无需位宽转换。
 
 **模块层次结构：**
 
 ```
 axicb_crossbar_top (顶层集成)
 ├── axicb_slv_if ×4    —— Master-Side Interface (外部Master连接点)
-│   ├── 数据位宽转换: 32b ↔ 160b (DATA_RATIO参数控制)
+│   ├── 数据位宽适配 (DATA_RATIO=1，同宽直通)
 │   └── Valid/Ready握手适配
 ├── axicb_switch_top   —— 中央交换矩阵
 │   ├── axicb_slv_switch ×4   —— 每Master的路由分发 (地址译码 + 通道解复用)
@@ -777,7 +784,7 @@ axicb_crossbar_top (顶层集成)
 │   └── axicb_pipeline  —— 可配置流水线寄存器 (MST_PIPELINE / SLV_PIPELINE)
 ├── axicb_mst_if ×4    —— Slave-Side Interface (外部Slave连接点)
 │   ├── 地址翻译: 全局地址 → Slave本地地址 (KEEP_BASE_ADDR控制)
-│   └── 数据位宽转换: 160b ↔ 目标位宽
+│   └── 数据位宽适配 (DATA_RATIO=1，同宽直通)
 ├── axicb_scfifo       —— 同步可清空FIFO (可配置REGFILE/BRAM实现)
 ├── axi_lite2axi       —— AXI-Lite → AXI4 协议桥
 └── axi2axi_lite       —— AXI4 → AXI-Lite 协议桥
@@ -789,25 +796,25 @@ axicb_crossbar_top (顶层集成)
 
 | Master端口 | 连接设备 | 外部位宽 | DATA_RATIO | ID_MASK | 优先级 | 路由掩码 |
 |-----------|----------|----------|------------|---------|--------|----------|
-| slv0 | **CPU (PicoRV32)** | 32-bit | 5 (160/32) | 0x10 | 0 | 4'b1111 (全Slave) |
-| slv1 | **DMA** | 160-bit | 1 (160/160) | 0x20 | 0 | 4'b1111 (全Slave) |
-| slv2 | 预留扩展 | 32-bit | 5 (160/32) | 0x30 | 0 | 4'b1111 |
-| slv3 | 预留扩展 | 32-bit | 5 (160/32) | 0x40 | 0 | 4'b1111 |
+| slv0 | **CPU (PicoRV32)** | 32-bit | 1 (32/32) | 0x10 | 0 | 4'b1111 (全Slave) |
+| slv1 | **DMA** | 32-bit | 1 (32/32) | 0x20 | 0 | 4'b1111 (全Slave) |
+| slv2 | 预留扩展 | 32-bit | 1 (32/32) | 0x30 | 0 | 4'b1111 |
+| slv3 | 预留扩展 | 32-bit | 1 (32/32) | 0x40 | 0 | 4'b1111 |
 
 **Slave端口（mst_if，外部Slave接入侧）：**
 
 | Slave端口 | 连接设备 | 地址范围 | 外部位宽 | DATA_RATIO | KEEP_BASE_ADDR |
 |-----------|----------|----------|----------|------------|----------------|
-| mst0 | **DDR** (程序/数据) | 0x0000 – 0x0FFF | 32-bit | 5 (160/32) | 0 (地址减去BASE) |
-| mst1 | **NPU_LMEM** (NPU本地存储) | 0x1000 – 0x1FFF | 160-bit | 1 (160/160) | 0 |
-| mst2 | **DMA_REG** (DMA CSR) | 0x2000 – 0x2FFF | 32-bit | 5 (160/32) | 0 |
-| mst3 | **NPU_REG** (NPU CSR) | 0x3000 – 0x3FFF | 32-bit | 5 (160/32) | 0 |
+| mst0 | **DDR** (程序/数据) | 0x0000 – 0x0FFF | 32-bit | 1 (32/32) | 0 (地址减去BASE) |
+| mst1 | **NPU_LMEM** (NPU本地存储) | 0x1000 – 0x1FFF | 32-bit | 1 (32/32) | 0 |
+| mst2 | **DMA_REG** (DMA CSR) | 0x2000 – 0x2FFF | 32-bit | 1 (32/32) | 0 |
+| mst3 | **NPU_REG** (NPU CSR) | 0x3000 – 0x3FFF | 32-bit | 1 (32/32) | 0 |
 
 **关键设计说明：**
-- CPU（32-bit Master）通过DATA_RATIO=5实现5拍窄传输合并为1拍宽传输（32b×5→160b），Crossbar内部统一以160-bit转发，到达DDR侧再拆分为32b
-- DMA与NPU_LMEM同宽（160b），DATA_RATIO=1，数据直通无转换，延迟最小
+- CPU（32-bit Master）DATA_RATIO=1，同宽直通，无位宽转换
+- DMA与NPU_LMEM同宽（32b），DATA_RATIO=1，数据直通无转换，延迟最小
 - 地址路由判断：`START_ADDR ≤ ADDR ≤ END_ADDR`，支持4KB地址空间粒度
-- 每个Master配置独立OSTDREQ_NUM=4，即最多4个Outstanding事务，内部FIFO深度=160b×4×1=640b
+- 每个Master配置独立OSTDREQ_NUM=4，即最多4个Outstanding事务，内部FIFO深度=32b×4×1=128b
 
 #### 3.3.3 路由与交换机制
 
@@ -921,16 +928,16 @@ Stage 3: 完成属性驱动
 `axicb_slv_if`（Master侧）和`axicb_mst_if`（Slave侧）内置数据位宽转换逻辑，由DATA_RATIO参数控制：
 
 **窄→宽（Narrow→Wide）转换：slv_if**
-- 32b→160b: DATA_RATIO=5，每5拍窄数据拼为1拍宽数据
-- 写通道：wdata[31:0] 逐拍累加至 160bit 缓冲区，满5拍后发出
-- 读通道：rdata[159:0] 拆分为5拍×32bit逐拍返回Master
+- 所有端口均为32-bit，DATA_RATIO=1，同宽直通
+- 写通道：wdata[31:0] 直通
+- 读通道：rdata[31:0] 直通
 
 **宽→窄（Wide→Narrow）转换：mst_if**
-- 160b→32b: 1拍宽数据拆为5拍窄数据发往32b Slave
-- 自动wstrb映射：160b strb → 5×32b strb
+- 所有端口均为32-bit，同宽直通，无需宽→窄转换
+- wstrb直通，无需映射
 
 **同宽直通：**
-- DMA(160b) ↔ NPU_LMEM(160b): DATA_RATIO=1，零延迟直通
+- DMA(32b) ↔ NPU_LMEM(32b): DATA_RATIO=1，零延迟直通
 
 #### 3.3.7 流水线与时序
 
@@ -952,7 +959,7 @@ Crossbar提供两级可配置流水线（MST_PIPELINE / SLV_PIPELINE参数）：
 
 | 优化措施 | 实现方式 | 收益 |
 |----------|----------|------|
-| 内部大位宽（160-bit）| AXI_DATA_W=160，单拍20字节 | 大幅减少拍数开销 |
+| 统一32-bit数据位宽 | AXI_DATA_W=32，单拍4字节 | 简化设计，无需位宽转换 |
 | Outstanding事务 | OSTDREQ_NUM=4，每Master 4深度 | 隐藏地址握手延迟 |
 | 读写完全独立 | AR/AW、R/B通道分模块并行处理 | 读写互不阻塞 |
 | per-Slave仲裁器 | 不同Slave可同时被不同Master访问 | 并行带宽叠加 |
@@ -961,7 +968,7 @@ Crossbar提供两级可配置流水线（MST_PIPELINE / SLV_PIPELINE参数）：
 
 ### 3.4 DMA控制器
 
-DMA控制器为自研7层分层设计，实现AXI4-Lite CSR配置接口→AXI4 Master数据搬运的完整通路，内部数据宽度160-bit，通过FIFO解耦读写两侧的数据速率。
+DMA控制器为自研7层分层设计，实现AXI4-Lite CSR配置接口→AXI4 Master数据搬运的完整通路，内部数据宽度32-bit，通过FIFO解耦读写两侧的数据速率。
 
 #### 3.4.1 模块层次结构
 
@@ -999,7 +1006,7 @@ dma_axi_top (顶层封装，含信号打包/解包)
         │   └── SVA断言: 完整AXI4协议合规检查 (valid/ready握手、信号稳定)
         │
         ├── dma_fifo (主数据FIFO，Read-Streamer→Write-Streamer数据缓冲)
-        │   └── 参数化: SLOTS=`DMA_FIFO_DEPTH, WIDTH=160
+        │   └── 参数化: SLOTS=`DMA_FIFO_DEPTH, WIDTH=32
         │
         └── dma_rom_reader (ROM旁路读取器，仿真专用)
             └── 地址0x8xxx_xxxx → ROM数据直读，绕过AXI总线
@@ -1083,7 +1090,7 @@ else
 **（3）非对齐访问处理（`DMA_EN_UNALIGNED`可配置）：**
 
 ```
-首尾非对齐策略 (NUM_BYTES=20, 即160bit=20Bytes对齐):
+首尾非对齐策略 (NUM_BYTES=4, 即32bit=4Bytes对齐):
   首地址非对齐 → 缩窄首Beat的wstrb, 仅传输有效字节
   末剩余不足  → 缩窄尾Beat的wstrb
   中间对齐段  → 全速Burst传输 (full_burst=1, strb全1)
@@ -1113,7 +1120,7 @@ streamer_dma_ctrl:
 ```
 
 - SLOTS = `DMA_FIFO_DEPTH`（2的幂次）
-- WIDTH = `DMA_DATA_WIDTH`（160-bit）
+- WIDTH = `DMA_DATA_WIDTH`（32-bit）
 - 满/空/occupancy/剩余空间 全状态输出
 - 支持clear_i信号（DMA状态清理时同步清空）
 - SVA断言：验证FIFO深度为2的幂次
@@ -1124,7 +1131,7 @@ streamer_dma_ctrl:
 
 ```
 if (src_addr[31:28] == 4'h8)  →  ROM Reader接管
-  从本地ROM (image_init.dat) 逐行读取160bit数据
+  从本地ROM (image_init.dat) 逐行读取32bit数据
   直接写入主数据FIFO，替代AXI Read通道
 ```
 
@@ -1199,7 +1206,7 @@ CPU                         DMA                            NPU
  │──CSR写(go=1)──────────→  │                              │
  │                           │──读Streamer发起AR Burst──→  AXI Bus → SRAM
  │                           │←─R通道返回数据───────────── AXI Bus ← SRAM
- │                           │──数据入FIFO(160-bit)         │
+ │                           │──数据入FIFO(32-bit)          │
  │                           │──写Streamer发起AW/W Burst──→ AXI Bus → NPU_LMEM
  │                           │←─B通道确认──────────────── AXI Bus ← NPU_LMEM
  │                           │                              │
@@ -1220,7 +1227,7 @@ CPU                         DMA                            NPU
 | 参数 | 值 | 说明 |
 |------|-----|------|
 | DMA_ID_VAL | 8'h20 | AXI Master ID，Crossbar据此路由返回通道 |
-| DMA_DATA_WIDTH | 160-bit | 内部数据宽度，匹配Crossbar |
+| DMA_DATA_WIDTH | 32-bit | 内部数据宽度，匹配Crossbar |
 | DMA_ADDR_WIDTH | 32-bit | 地址宽度 |
 | DMA_NUM_DESC | 2 | 描述符数量（一次可配置2段传蝀） |
 | DMA_MAX_BEAT_BURST | 16 | 硬件最大Burst支持 |
@@ -1239,13 +1246,13 @@ CPU                         DMA                            NPU
 | 存储区域 | Crossbar端口 | 地址范围 | 位宽 | 用途 |
 |----------|-------------|----------|------|------|
 | **DDR** (SoC外部) | mst0 | 0x0000–0x0FFF | 32-bit | 程序代码+栈+堆+CPU数据 |
-| **NPU_LMEM** (NPU本地) | mst1 | 0x1000–0x1FFF | 160-bit | NPU权重Buffer+输入/输出特征图 |
+| **NPU_LMEM** (NPU本地) | mst1 | 0x1000–0x1FFF | 32-bit | NPU权重Buffer+输入/输出特征图 |
 | **DMA_REG** | mst2 | 0x2000–0x2FFF | 32-bit | DMA CSR寄存器（CPU通过Crossbar访问）|
 | **NPU_REG** | mst3 | 0x3000–0x3FFF | 32-bit | NPU CSR寄存器（CPU通过Crossbar访问）|
 
 **关键设计：**
-- NPU_LMEM采用160-bit宽口，与DMA同宽（DATA_RATIO=1），DMA搬运数据直通无位宽转换，延迟最小
-- DDR和CSR寄存器均为32-bit窄口，通过Crossbar内置DATA_RATIO=5实现32b↔160b自动转换
+- NPU_LMEM采用32-bit宽口，与DMA同宽（DATA_RATIO=1），DMA搬运数据直通无位宽转换，延迟最小
+- DDR和CSR寄存器均为32-bit，通过Crossbar DATA_RATIO=1同宽直通
 - CPU可通过Crossbar直接访问所有地址范围（MST0_ROUTES=4'b1111），实现统一编址
 - NPU_LMEM支持乒乓缓冲：推理时将输入/输出特征图区域交替使用，避免层间数据移动
 
@@ -1254,9 +1261,9 @@ CPU                         DMA                            NPU
 ```
 推理数据流:
   CPU ─(AXI-Lite)─→ DMA CSR (0x2000)      // 配置描述符
-  DMA: DDR(0x0000) ─→ [dma_fifo 160b] ─→ NPU_LMEM(0x1000)  // 权重/输入搬运
+  DMA: DDR(0x0000) ─→ [dma_fifo 32b] ─→ NPU_LMEM(0x1000)   // 权重/输入搬运
   NPU: NPU_LMEM(0x1000) ←→ 内部计算        // 读取数据，写出结果
-  DMA: NPU_LMEM(0x1000) ─→ [dma_fifo 160b] ─→ DDR(0x0000)  // 结果回写（可选）
+  DMA: NPU_LMEM(0x1000) ─→ [dma_fifo 32b] ─→ DDR(0x0000)   // 结果回写（可选）
 ```
 
 > NPU计算过程直接在NPU_LMEM中原地读写，DMA负责NPU_LMEM与DDR之间的数据搬运，CPU仅通过CSR下发指令，不参与数据搬运。
@@ -1265,10 +1272,10 @@ CPU                         DMA                            NPU
 
 | 数据路径 | 源→目标位宽 | Crossbar DATA_RATIO | 转换开销 |
 |----------|-------------|---------------------|----------|
-| CPU(32b) → DDR(32b) | 32b→160b→32b | 5→5 | 2级转换（N→W→N） |
-| DMA(160b) → NPU_LMEM(160b) | 160b→160b | 1→1 | 0级转换（直通） |
-| CPU(32b) → NPU_REG(32b) | 32b→160b→32b | 5→5 | 2级转换 |
-| DMA(160b) → DDR(32b) | 160b→160b→32b | 1→5 | 1级转换（W→N）|
+| CPU(32b) → DDR(32b) | 32b→32b | 1→1 | 0级转换（直通） |
+| DMA(32b) → NPU_LMEM(32b) | 32b→32b | 1→1 | 0级转换（直通） |
+| CPU(32b) → NPU_REG(32b) | 32b→32b | 1→1 | 0级转换（直通） |
+| DMA(32b) → DDR(32b) | 32b→32b | 1→1 | 0级转换（直通） |
 
 ### 3.6 低功耗设计实现
 

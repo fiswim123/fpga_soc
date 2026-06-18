@@ -15,16 +15,25 @@ module soc_top #(
   parameter logic [31:0] CPU_RAM_BASE      = 32'h1000_0000,
   parameter int          CPU_RAM_AW        = 12,    // 4KB
 
-  // DDR
-  parameter int          DDR_SIZE_BYTES    = 64*1024*1024,
+  // DDR (CPU主存储)
+  parameter int          DDR_SIZE_BYTES    = 256*1024,// 256KB
   parameter [8*128-1:0]  DDR_INIT_FILE     = "",
 
-  // NPU LMEM
+  // NPU LMEM (NPU本地存储 / DMA共享缓冲)
   parameter int          NPU_LMEM_SIZE_BYTES = 131072,  // 128KB
 
-  // NPU/DMA CSR
-  parameter logic [31:0] NPU_CSR_BASE  = 32'h0002_0000,
-  parameter logic [31:0] DMA_CSR_BASE  = 32'h0002_1000
+  // NPU/DMA CSR 基地址
+  parameter logic [31:0] NPU_CSR_BASE  = 32'h0003_0000,
+  parameter logic [31:0] DMA_CSR_BASE  = 32'h0002_1000,
+
+  // NPU 数据文件 (CIFAR-10 inference)
+  parameter string NPU_IMAGE_DATA_FILE = "../src/npu/image_data.dat",
+  parameter string NPU_CONV1_FILE      = "../src/npu/conv1.dat",
+  parameter string NPU_CONV2_FILE      = "../src/npu/conv2.dat",
+  parameter string NPU_BIAS1_FILE      = "../src/npu/bias1.dat",
+  parameter string NPU_BIAS2_FILE      = "../src/npu/bias2.dat",
+  parameter string NPU_FC_WEIGHT_FILE  = "../src/npu/export_cifar/cifar10_int8_pow2_fused/fc_weight_i8.memh",
+  parameter string NPU_FC_BIAS_FILE    = "../src/npu/export_cifar/cifar10_int8_pow2_fused_bias_i8/fc_bias_i8.memh"
 )(
   input  logic clk,
   input  logic rst,       // 同步复位，高有效
@@ -32,7 +41,14 @@ module soc_top #(
   // 中断输出
   output logic dma_done_o,
   output logic dma_error_o,
-  output logic cpu_trap_o
+  output logic cpu_trap_o,
+
+  // NPU 状态输出
+  output logic       npu_busy,
+  output logic       npu_done,
+  output logic       npu_pred_valid,
+  output logic [3:0] npu_pred_class_id,
+  output logic [7:0] npu_pred_logit
 );
 
   // ==========================================================
@@ -291,6 +307,32 @@ module soc_top #(
   wire [1:0] dma_axi_bresp_xbar, dma_axi_rresp_xbar;
   axi_resp_t dma_axi_bresp, dma_axi_rresp;
 
+  // NPU CSR 简单接口信号
+  logic        npu_csr_wr_en;
+  logic        npu_csr_rd_en;
+  logic [7:0]  npu_csr_addr;
+  logic [31:0] npu_csr_wdata;
+  logic [31:0] npu_csr_rdata;
+
+  // NPU AXI-CSR 桥寄存器
+  logic                  npu_bvalid_r;
+  logic                  npu_rvalid_r;
+  logic [7:0]            npu_csr_addr_r;
+  logic [31:0]           npu_csr_rdata_r;
+  logic [AXI_ID_W-1:0]  npu_bid_r, npu_rid_r;
+
+  // NPU 内部预测信号
+  logic       npu_pred_valid_i;
+  logic [3:0] npu_pred_class_id_i;
+  logic [7:0] npu_pred_logit_i;
+  logic       npu_busy_i, npu_done_i;
+
+  assign npu_busy          = npu_busy_i;
+  assign npu_done          = npu_done_i;
+  assign npu_pred_valid    = npu_pred_valid_i;
+  assign npu_pred_class_id = npu_pred_class_id_i;
+  assign npu_pred_logit    = npu_pred_logit_i;
+
   // ==========================================================
   // CPU (PicoRV32 with AXI4-Lite)
   // ==========================================================
@@ -469,13 +511,17 @@ module soc_top #(
     .MST2_ROUTES(4'b0000), .MST2_ID_MASK(8'h30),
     .MST3_CDC(0), .MST3_OSTDREQ_NUM(1), .MST3_OSTDREQ_SIZE(1), .MST3_PRIORITY(0),
     .MST3_ROUTES(4'b0000), .MST3_ID_MASK(8'h40),
-    .SLV0_CDC(0), .SLV0_START_ADDR(32'h4000_0000), .SLV0_END_ADDR(32'h43FF_FFFF),
+    // mst0: DDR (256KB @ 0x4000_0000)
+    .SLV0_CDC(0), .SLV0_START_ADDR(32'h4000_0000), .SLV0_END_ADDR(32'h4003_FFFF),
     .SLV0_OSTDREQ_NUM(4), .SLV0_OSTDREQ_SIZE(1), .SLV0_KEEP_BASE_ADDR(0),
+    // mst1: NPU LMEM (128KB @ 0x0000_1000)
     .SLV1_CDC(0), .SLV1_START_ADDR(32'h0000_1000), .SLV1_END_ADDR(32'h0002_0FFF),
     .SLV1_OSTDREQ_NUM(4), .SLV1_OSTDREQ_SIZE(1), .SLV1_KEEP_BASE_ADDR(0),
+    // mst2: DMA CSR (4KB @ 0x0002_1000)
     .SLV2_CDC(0), .SLV2_START_ADDR(32'h0002_1000), .SLV2_END_ADDR(32'h0002_1FFF),
     .SLV2_OSTDREQ_NUM(4), .SLV2_OSTDREQ_SIZE(1), .SLV2_KEEP_BASE_ADDR(0),
-    .SLV3_CDC(0), .SLV3_START_ADDR(32'h0002_0000), .SLV3_END_ADDR(32'h0002_0FFF),
+    // mst3: NPU CSR (4KB @ 0x0003_0000)
+    .SLV3_CDC(0), .SLV3_START_ADDR(32'h0003_0000), .SLV3_END_ADDR(32'h0003_0FFF),
     .SLV3_OSTDREQ_NUM(4), .SLV3_OSTDREQ_SIZE(1), .SLV3_KEEP_BASE_ADDR(0)
   ) u_crossbar (
     .aclk(clk), .aresetn(resetn), .srst(rst),
@@ -523,7 +569,7 @@ module soc_top #(
     .slv1_rvalid(dma_axi_rvalid), .slv1_rready(dma_axi_rready),
     .slv1_rid(dma_axi_rid), .slv1_rresp(dma_axi_rresp_xbar),
     .slv1_rdata(dma_axi_rdata), .slv1_rlast(dma_axi_rlast), .slv1_ruser(),
-    // Slave 2/3 未连接
+    // Slave 2/3 未连接（外部Master）
     .slv2_aclk(clk), .slv2_aresetn(resetn), .slv2_srst(rst),
     .slv2_awvalid(1'b0), .slv2_awaddr('0), .slv2_awlen('0), .slv2_awsize('0),
     .slv2_awburst('0), .slv2_awlock(1'b0), .slv2_awcache(4'b0), .slv2_awprot(3'b0),
@@ -641,7 +687,7 @@ module soc_top #(
   );
 
   // ==========================================================
-  // DDR (从设备 0)
+  // DDR (从设备 0) — CPU 主存储
   // ==========================================================
   ddr #(
     .AXI_ID_W(AXI_ID_W), .AXI_ADDR_W(AXI_ADDR_W), .AXI_DATA_W(AXI_DATA_W),
@@ -667,12 +713,12 @@ module soc_top #(
   );
 
   // ==========================================================
-  // NPU 本地存储器 (从设备 1)
+  // NPU LMEM — 共享 SRAM (从设备 1, DMA/CPU 可访问)
   // ==========================================================
-  npu_ram #(
+  ddr #(
     .AXI_ID_W(AXI_ID_W), .AXI_ADDR_W(AXI_ADDR_W), .AXI_DATA_W(AXI_DATA_W),
-    .MEM_BYTES(NPU_LMEM_SIZE_BYTES), .READ_LATENCY(1)
-  ) u_npu_ram (
+    .DDR_SIZE_BYTES(NPU_LMEM_SIZE_BYTES), .DDR_INIT_FILE("")
+  ) u_npu_lmem (
     .aclk(clk), .aresetn(resetn),
     .s_awvalid(xbar_mst1_awvalid), .s_awready(xbar_mst1_awready),
     .s_awaddr(xbar_mst1_awaddr), .s_awlen(xbar_mst1_awlen),
@@ -693,29 +739,138 @@ module soc_top #(
   );
 
   // ==========================================================
-  // NPU 控制寄存器 (从设备 3)
+  // NPU CSR AXI→简单CSR桥 + NPU 顶层 (从设备 3)
+  //
+  // 地址映射: CPU 写 0x0003_0000 → crossbar mst3 → 此桥 → npu_top CSR
+  //
+  // CSR寄存器 (npu_csr_regs):
+  //   0x00 CTRL    [W]  bit[0]=start, bit[1]=layer_sel
+  //   0x04 STATUS  [R]  bit[0]=busy,  bit[1]=done
+  //   0x08 SHAPE0  [W]  in_w[5:0], in_h[13:8], in_ch[21:16]
+  //   0x0C SHAPE1  [W]  kernel[2:0], pad[10:8], k_len[25:16]
+  //   0x10 TILE    [W]  row_base[9:0]
+  //   0x20 PRED    [R]  valid[0], class_id[11:8], logit[23:16]
+  //   0x24 LOGIT0  [R]  logits[3:0]
+  //   0x28 LOGIT1  [R]  logits[7:4]
+  //   0x2C LOGIT2  [R]  logits[9:8]
   // ==========================================================
-  npu_csr #(
-    .AXI_ID_W(AXI_ID_W), .AXI_ADDR_W(AXI_ADDR_W), .AXI_DATA_W(AXI_DATA_W),
-    .BASE_ADDR(NPU_CSR_BASE), .IS_DMA(0)
-  ) u_csr_npu (
-    .aclk(clk), .aresetn(resetn),
-    .s_awvalid(xbar_mst3_awvalid), .s_awready(xbar_mst3_awready),
-    .s_awaddr(xbar_mst3_awaddr), .s_awlen(xbar_mst3_awlen),
-    .s_awsize(xbar_mst3_awsize), .s_awburst(xbar_mst3_awburst),
-    .s_awid(xbar_mst3_awid),
-    .s_wvalid(xbar_mst3_wvalid), .s_wready(xbar_mst3_wready),
-    .s_wdata(xbar_mst3_wdata), .s_wstrb(xbar_mst3_wstrb),
-    .s_wlast(xbar_mst3_wlast),
-    .s_bvalid(xbar_mst3_bvalid), .s_bready(xbar_mst3_bready),
-    .s_bresp(xbar_mst3_bresp), .s_bid(xbar_mst3_bid),
-    .s_arvalid(xbar_mst3_arvalid), .s_arready(xbar_mst3_arready),
-    .s_araddr(xbar_mst3_araddr), .s_arlen(xbar_mst3_arlen),
-    .s_arsize(xbar_mst3_arsize), .s_arburst(xbar_mst3_arburst),
-    .s_arid(xbar_mst3_arid),
-    .s_rvalid(xbar_mst3_rvalid), .s_rready(xbar_mst3_rready),
-    .s_rdata(xbar_mst3_rdata), .s_rresp(xbar_mst3_rresp),
-    .s_rlast(xbar_mst3_rlast), .s_rid(xbar_mst3_rid)
+
+  // AXI write/read → simple CSR bridge (single-beat only)
+  always_ff @(posedge clk or negedge resetn) begin
+    if (!resetn) begin
+      npu_bvalid_r   <= 1'b0;
+      npu_rvalid_r   <= 1'b0;
+      npu_csr_addr_r <= '0;
+      npu_csr_rdata_r <= '0;
+      npu_bid_r      <= '0;
+      npu_rid_r      <= '0;
+    end else begin
+      // Clear on handshake completion
+      if (npu_bvalid_r && xbar_mst3_bready)
+        npu_bvalid_r <= 1'b0;
+      if (npu_rvalid_r && xbar_mst3_rready)
+        npu_rvalid_r <= 1'b0;
+
+      // Write: accept AW+W together, issue B response next cycle
+      if (xbar_mst3_awvalid && xbar_mst3_awready &&
+          xbar_mst3_wvalid  && xbar_mst3_wready) begin
+        npu_bid_r    <= xbar_mst3_awid;
+        npu_bvalid_r <= 1'b1;
+      end
+
+      // Read: accept AR, latch NPU rdata, issue R response next cycle
+      if (xbar_mst3_arvalid && xbar_mst3_arready) begin
+        npu_csr_addr_r  <= xbar_mst3_araddr[7:0];
+        npu_rid_r       <= xbar_mst3_arid;
+        npu_rvalid_r    <= 1'b1;
+        npu_csr_rdata_r <= npu_csr_rdata;   // latch combinational read data
+      end
+    end
+  end
+
+  // Accept only when no pending response
+  wire npu_axi_idle = !npu_bvalid_r && !npu_rvalid_r;
+
+  assign xbar_mst3_awready = npu_axi_idle && xbar_mst3_awvalid && xbar_mst3_wvalid;
+  assign xbar_mst3_wready  = npu_axi_idle && xbar_mst3_awvalid && xbar_mst3_wvalid;
+  assign xbar_mst3_arready = npu_axi_idle && xbar_mst3_arvalid && !xbar_mst3_awvalid;
+
+  // Write response
+  assign xbar_mst3_bvalid = npu_bvalid_r;
+  assign xbar_mst3_bresp  = 2'b00;   // OKAY
+  assign xbar_mst3_bid    = npu_bid_r;
+
+  // Read response
+  assign xbar_mst3_rvalid = npu_rvalid_r;
+  assign xbar_mst3_rdata  = npu_csr_rdata_r;
+  assign xbar_mst3_rresp  = 2'b00;   // OKAY
+  assign xbar_mst3_rid    = npu_rid_r;
+  assign xbar_mst3_rlast  = 1'b1;
+
+  // NPU CSR simple bus
+  assign npu_csr_wr_en = xbar_mst3_awvalid && xbar_mst3_awready &&
+                          xbar_mst3_wvalid  && xbar_mst3_wready;
+  assign npu_csr_rd_en = xbar_mst3_arvalid && xbar_mst3_arready;
+  assign npu_csr_addr  = npu_csr_wr_en ? xbar_mst3_awaddr[7:0] :
+                          npu_csr_rd_en ? xbar_mst3_araddr[7:0] : npu_csr_addr_r;
+  assign npu_csr_wdata = xbar_mst3_wdata;
+
+  // ==========================================================
+  // NPU 顶层实例化
+  //
+  // NPU 内部包含:
+  //   conv_top  — 两层卷积 (conv1 3x32x32→32, conv2 32x16x16→64) + maxpool
+  //   gap_fc_logits — GAP + FC 64→10 分类
+  //   数据全部从 ROM 文件加载 (image_data/conv/weight/bias)
+  // ==========================================================
+  npu_top #(
+    .IMAGE_DATA_FILE (NPU_IMAGE_DATA_FILE),
+    .CONV1_FILE      (NPU_CONV1_FILE),
+    .CONV2_FILE      (NPU_CONV2_FILE),
+    .BIAS1_FILE      (NPU_BIAS1_FILE),
+    .BIAS2_FILE      (NPU_BIAS2_FILE),
+    .FC_WEIGHT_FILE  (NPU_FC_WEIGHT_FILE),
+    .FC_BIAS_FILE    (NPU_FC_BIAS_FILE)
+  ) u_npu (
+    .clk       (clk),
+    .rst_n     (resetn),
+
+    // CSR 接口 (经AXI桥驱动)
+    .csr_wr_en (npu_csr_wr_en),
+    .csr_rd_en (npu_csr_rd_en),
+    .csr_addr  (npu_csr_addr),
+    .csr_wdata (npu_csr_wdata),
+    .csr_rdata (npu_csr_rdata),
+
+    // 状态
+    .busy      (npu_busy_i),
+    .done      (npu_done_i),
+
+    // Debug RAM 读端口 (SoC中未使用，接零)
+    .dbg_sa_rd_en    (1'b0),
+    .dbg_sa_rd_addr  ('0),
+    .dbg_sa_rd_data  (),
+
+    .dbg_result_rd_en  (1'b0),
+    .dbg_result_rd_addr('0),
+    .dbg_result_rd_data(),
+
+    .dbg_pool_rd_en    (1'b0),
+    .dbg_pool_rd_addr  ('0),
+    .dbg_pool_rd_data  (),
+
+    .dbg_logit_rd_en   (1'b0),
+    .dbg_logit_rd_addr ('0),
+    .dbg_logit_rd_data (),
+
+    // 推理结果输出
+    .pred_valid    (npu_pred_valid_i),
+    .pred_class_id (npu_pred_class_id_i),
+    .pred_logit    (npu_pred_logit_i),
+
+    // MAC debug (SoC中未使用)
+    .mac_dbg_tile_valid(),
+    .mac_dbg_tile_data ()
   );
 
 endmodule

@@ -14,3 +14,25 @@ src/mnist.hex
 # OS
 .DS_Store
 Thumbs.db
+
+# Large files (ModelSim waveforms, datasets)
+src/npu/sim/wlft*
+src/npu/sim/work_*/
+src/npu/export_cifar/data/cifar-10-python.tar.gz
+src/npu/export_cifar/data/cifar-10-batches-py/
+
+# ModelSim working directories and waveform files
+src/npu/sim/work_*/
+src/npu/sim/work/
+src/npu/sim/wlft*
+src/npu/sim/transcript
+src/npu/sim/vsim.wlf
+src/npu/work/
+src/npu/transcript
+
+# Large dataset archives
+*.tar.gz
+src/npu/export_cifar/data/
+
+# ModelSim temp files
+vish_stacktrace.vstf

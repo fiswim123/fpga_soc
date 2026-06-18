@@ -1,0 +1,16 @@
+../rom.sv
+../ram.sv
+../pe.sv
+../mm_systolic_4x4.sv
+../dmac_im2col_stream.sv
+../dmac_image_sa_writer.sv
+../npu_csr_regs.sv
+../dmac_tile_scheduler.sv
+../npu_dmac_frontend.sv
+../mac_array_40x32_stream.sv
+../ppu_maxpool.sv
+../gap_fc_logits.sv
+../conv_top.sv
+../npu_top.sv
+../tb_conv_top.sv
+../tb_npu_top.sv
