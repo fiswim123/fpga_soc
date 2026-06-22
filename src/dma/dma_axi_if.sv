@@ -158,7 +158,7 @@ axi_wr_strb_t wburst_strb_ff,  next_wburst_strb;
     .clear_i(1'b0),
     .free_o ()
   );
-
+/*
   // 读地址通道握手
 always @(posedge clk) begin
     if (dma_mosi_o.arvalid && dma_miso_i.arready) begin
@@ -174,6 +174,7 @@ always @(posedge clk) begin
                  dma_mosi_o.awaddr, dma_mosi_o.awlen, dma_mosi_o.awsize);
     end
 end
+*/
 /*
 always_ff @(posedge clk) begin
   if (dma_mosi_o.awvalid && dma_miso_i.awready) begin

@@ -44,45 +44,58 @@ module dmac_im2col_stream #(
     input  logic [MAX_POOL_CH*8-1:0] pool_wr_data,
 
     output logic out_valid,
-    output logic [LANE_NUM*8-1:0] a_col_320b
+    output logic [LANE_NUM*8-1:0] a_col_320b,
+
+    // External npu_ram read port (for loading image_buf)
+    output logic [31:0] pixel_rd_addr,   // byte address into npu_ram
+    input  logic [31:0] pixel_rd_data,   // 32-bit read data from npu_ram
+
+    // Load interface: pulse load_start to copy npu_ram → image_buf
+    input  logic load_start,
+    output logic load_done
 );
 
     logic [23:0] image_buf [0:(MAX_IMG_W*MAX_IMG_H)-1];
     logic [MAX_POOL_CH*8-1:0] pool_buf [0:(MAX_POOL_W*MAX_POOL_H)-1];
 
-    assign req_ready = 1'b1;
+    // Load FSM: copy npu_ram → image_buf
+    typedef enum logic [1:0] { LD_IDLE, LD_READ, LD_DONE } ld_state_t;
+    ld_state_t ld_state;
+    logic [9:0] ld_idx;   // pixel index 0~1023
 
-    initial begin
-        integer fd;
-        integer row;
-        integer code;
-        string tok;
-        logic [23:0] pix;
+    assign load_done = (ld_state == LD_DONE);
+    assign req_ready = (ld_state == LD_DONE) || (ld_state == LD_IDLE && !load_start);
 
-        for (row = 0; row < MAX_IMG_W*MAX_IMG_H; row = row + 1) begin
-            image_buf[row] = 24'd0;
-        end
-        for (int p = 0; p < MAX_POOL_W*MAX_POOL_H; p = p + 1) begin
-            pool_buf[p] = '0;
-        end
+    // Drive npu_ram read address based on current state
+    assign pixel_rd_addr = (ld_state == LD_READ) ? {22'd0, ld_idx, 2'd0} : 32'd0;
 
-        fd = $fopen(IMAGE_DATA_FILE, "r");
-        if (fd == 0) begin
-            $error("image_data open failed: %s", IMAGE_DATA_FILE);
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ld_state <= LD_IDLE;
+            ld_idx   <= 10'd0;
+            for (int p = 0; p < MAX_POOL_W*MAX_POOL_H; p = p + 1)
+                pool_buf[p] <= '0;
         end else begin
-            row = 0;
-            while (($fscanf(fd, "%s", tok) == 1) && (row < MAX_IMG_W*MAX_IMG_H)) begin
-                if ((tok.len() >= 2) &&
-                    ((tok.substr(0,1) == "0x") || (tok.substr(0,1) == "0X"))) begin
-                    tok = tok.substr(2, tok.len()-1);
+            unique case (ld_state)
+                LD_IDLE: begin
+                    ld_idx <= 10'd0;
+                    if (load_start)
+                        ld_state <= LD_READ;
                 end
-                code = $sscanf(tok, "%h", pix);
-                if (code == 1) begin
-                    image_buf[row] = pix;
+                LD_READ: begin
+                    // Latch pixel from npu_ram (combinational read, registered here)
+                    image_buf[ld_idx] <= pixel_rd_data[23:0];
+                    if (ld_idx == (MAX_IMG_W*MAX_IMG_H - 1))
+                        ld_state <= LD_DONE;
+                    ld_idx <= ld_idx + 10'd1;
                 end
-                row = row + 1;
-            end
-            $fclose(fd);
+                LD_DONE: begin
+                    // Stay done until next load_start
+                    if (load_start)
+                        ld_state <= LD_READ;
+                end
+                default: ld_state <= LD_IDLE;
+            endcase
         end
     end
 

@@ -40,7 +40,15 @@ module dmac_image_sa_writer #(
     output logic [TILE_ROWS*8-1:0] ram_wdata,
 
     output logic busy,
-    output logic done
+    output logic done,
+
+    // npu_ram read port (for loading image_buf)
+    output logic [31:0] pixel_rd_addr,
+    input  logic [31:0] pixel_rd_data,
+
+    // Load control
+    input  logic load_start,
+    output logic load_done
 );
 
     typedef enum logic [1:0] {
@@ -94,7 +102,13 @@ module dmac_image_sa_writer #(
         .pool_wr_pixel(pool_wr_pixel),
         .pool_wr_data(pool_wr_data),
         .out_valid(out_valid),
-        .a_col_320b(a_col_lsb)
+        .a_col_320b(a_col_lsb),
+        // npu_ram read port
+        .pixel_rd_addr(pixel_rd_addr),
+        .pixel_rd_data(pixel_rd_data),
+        // Load control
+        .load_start(load_start),
+        .load_done(load_done)
     );
 
     function automatic logic [TILE_ROWS*8-1:0] pack_image_sa(

@@ -52,7 +52,15 @@ module conv_top #(
     input  logic [79:0] result_logits_flat,
 
     output logic mac_dbg_tile_valid,
-    output logic [(10*8*4*4*8)-1:0] mac_dbg_tile_data
+    output logic [(10*8*4*4*8)-1:0] mac_dbg_tile_data,
+
+    // npu_ram read port (for loading image_buf from DMA-written data)
+    output logic [31:0] pixel_rd_addr,
+    input  logic [31:0] pixel_rd_data,
+
+    // Load control: pulse img_load_start to trigger npu_ram → image_buf copy
+    input  logic img_load_start,
+    output logic img_load_done
 );
 
     logic csr_start_pulse;
@@ -234,7 +242,13 @@ module conv_top #(
         .ram_waddr(dmac_ram_waddr),
         .ram_wdata(dmac_ram_wdata),
         .busy(dmac_busy),
-        .done(dmac_done)
+        .done(dmac_done),
+        // npu_ram read port
+        .pixel_rd_addr(pixel_rd_addr),
+        .pixel_rd_data(pixel_rd_data),
+        // Load control
+        .load_start(img_load_start),
+        .load_done(img_load_done)
     );
 
     ram #(

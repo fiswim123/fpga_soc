@@ -167,8 +167,8 @@ module dma_streamer
     if (beats_to_page < max_beats) max_beats = beats_to_page;
 
     // 添加打印信息
-    $display("[great_alen] addr=0x%08x, bytes=%0d, maxb_i=%0d, hw_max_beats=%0d, cfg_max_beats=%0d, max_by_bytes=%0d, final_beats=%0d, alen=%0d",
-             addr, bytes, dma_maxb_i, hw_max_beats, cfg_max_beats, max_by_bytes, max_beats, (max_beats - 1));
+    //$display("[great_alen] addr=0x%08x, bytes=%0d, maxb_i=%0d, hw_max_beats=%0d, cfg_max_beats=%0d, max_by_bytes=%0d, final_beats=%0d, alen=%0d",
+    //         addr, bytes, dma_maxb_i, hw_max_beats, cfg_max_beats, max_by_bytes, max_beats, (max_beats - 1));
 
     // 5. 返回 AXI len 值
     return (max_beats - 1);

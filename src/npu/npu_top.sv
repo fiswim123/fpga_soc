@@ -53,13 +53,51 @@ module npu_top #(
     output logic [7:0] pred_logit,
 
     output logic mac_dbg_tile_valid,
-    output logic [(10*8*4*4*8)-1:0] mac_dbg_tile_data
+    output logic [(10*8*4*4*8)-1:0] mac_dbg_tile_data,
+
+    // AXI4 Slave interface (DMA writes image data to npu_ram)
+    input  logic                    s_ram_awvalid,
+    output logic                    s_ram_awready,
+    input  logic [31:0]            s_ram_awaddr,
+    input  logic [7:0]             s_ram_awlen,
+    input  logic [2:0]             s_ram_awsize,
+    input  logic [1:0]             s_ram_awburst,
+    input  logic [7:0]             s_ram_awid,
+    input  logic                    s_ram_wvalid,
+    output logic                    s_ram_wready,
+    input  logic [31:0]            s_ram_wdata,
+    input  logic [3:0]             s_ram_wstrb,
+    input  logic                    s_ram_wlast,
+    output logic                    s_ram_bvalid,
+    input  logic                    s_ram_bready,
+    output logic [1:0]             s_ram_bresp,
+    output logic [7:0]             s_ram_bid,
+    input  logic                    s_ram_arvalid,
+    output logic                    s_ram_arready,
+    input  logic [31:0]            s_ram_araddr,
+    input  logic [7:0]             s_ram_arlen,
+    input  logic [2:0]             s_ram_arsize,
+    input  logic [1:0]             s_ram_arburst,
+    input  logic [7:0]             s_ram_arid,
+    output logic                    s_ram_rvalid,
+    input  logic                    s_ram_rready,
+    output logic [31:0]            s_ram_rdata,
+    output logic [1:0]             s_ram_rresp,
+    output logic                    s_ram_rlast,
+    output logic [7:0]             s_ram_rid
 );
 
     localparam logic [7:0] REG_CTRL = 8'h00;
 
-    typedef enum logic [1:0] {
+    // NPU RAM signals
+    logic [31:0] pixel_rd_addr;
+    logic [31:0] pixel_rd_data;
+    logic img_load_start;
+    logic img_load_done;
+
+    typedef enum logic [2:0] {
         T_IDLE,
+        T_LOAD_IMG,
         T_WAIT_CONV,
         T_WAIT_FC
     } top_state_t;
@@ -94,6 +132,52 @@ module npu_top #(
     assign conv_dbg_pool_rd_en = dbg_pool_rd_en;
     assign conv_dbg_pool_rd_addr = dbg_pool_rd_addr;
     assign dbg_pool_rd_data = conv_dbg_pool_rd_data;
+
+    // ==========================================================
+    // npu_ram: 4KB image storage, DMA writes via AXI, im2col reads
+    // ==========================================================
+    npu_ram #(
+        .AXI_ID_W(8),
+        .AXI_ADDR_W(32),
+        .AXI_DATA_W(32),
+        .MEM_BYTES(4096),
+        .READ_LATENCY(1)
+    ) u_npu_ram (
+        .aclk(clk),
+        .aresetn(rst_n),
+        .s_awvalid(s_ram_awvalid),
+        .s_awready(s_ram_awready),
+        .s_awaddr(s_ram_awaddr),
+        .s_awlen(s_ram_awlen),
+        .s_awsize(s_ram_awsize),
+        .s_awburst(s_ram_awburst),
+        .s_awid(s_ram_awid),
+        .s_wvalid(s_ram_wvalid),
+        .s_wready(s_ram_wready),
+        .s_wdata(s_ram_wdata),
+        .s_wstrb(s_ram_wstrb),
+        .s_wlast(s_ram_wlast),
+        .s_bvalid(s_ram_bvalid),
+        .s_bready(s_ram_bready),
+        .s_bresp(s_ram_bresp),
+        .s_bid(s_ram_bid),
+        .s_arvalid(s_ram_arvalid),
+        .s_arready(s_ram_arready),
+        .s_araddr(s_ram_araddr),
+        .s_arlen(s_ram_arlen),
+        .s_arsize(s_ram_arsize),
+        .s_arburst(s_ram_arburst),
+        .s_arid(s_ram_arid),
+        .s_rvalid(s_ram_rvalid),
+        .s_rready(s_ram_rready),
+        .s_rdata(s_ram_rdata),
+        .s_rresp(s_ram_rresp),
+        .s_rlast(s_ram_rlast),
+        .s_rid(s_ram_rid),
+        // Simple read port for im2col
+        .simple_rd_addr(pixel_rd_addr),
+        .simple_rd_data(pixel_rd_data)
+    );
 
     conv_top #(
         .IMAGE_DATA_FILE(IMAGE_DATA_FILE),
@@ -139,7 +223,13 @@ module npu_top #(
         .result_logit(fc_pred_logit),
         .result_logits_flat(fc_logits_flat),
         .mac_dbg_tile_valid(mac_dbg_tile_valid),
-        .mac_dbg_tile_data(mac_dbg_tile_data)
+        .mac_dbg_tile_data(mac_dbg_tile_data),
+        // npu_ram read port
+        .pixel_rd_addr(pixel_rd_addr),
+        .pixel_rd_data(pixel_rd_data),
+        // Load control
+        .img_load_start(img_load_start),
+        .img_load_done(img_load_done)
     );
 
     gap_fc_logits #(
@@ -179,13 +269,24 @@ module npu_top #(
             top_state <= T_IDLE;
             fc_start <= 1'b0;
             top_done_pulse <= 1'b0;
+            img_load_start <= 1'b0;
         end else begin
             fc_start <= 1'b0;
             top_done_pulse <= 1'b0;
+            img_load_start <= 1'b0;
 
             unique case (top_state)
                 T_IDLE: begin
                     if (csr_wr_en && (csr_addr == REG_CTRL) && csr_wdata[0]) begin
+                        // First load image from npu_ram to image_buf
+                        img_load_start <= 1'b1;
+                        top_state <= T_LOAD_IMG;
+                    end
+                end
+
+                T_LOAD_IMG: begin
+                    // Wait for npu_ram → image_buf copy to complete
+                    if (img_load_done) begin
                         top_state <= T_WAIT_CONV;
                     end
                 end

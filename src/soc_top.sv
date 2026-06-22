@@ -19,9 +19,6 @@ module soc_top #(
   parameter int          DDR_SIZE_BYTES    = 256*1024,// 256KB
   parameter [8*128-1:0]  DDR_INIT_FILE     = "",
 
-  // NPU LMEM (NPU本地存储 / DMA共享缓冲)
-  parameter int          NPU_LMEM_SIZE_BYTES = 131072,  // 128KB
-
   // NPU/DMA CSR 基地址
   parameter logic [31:0] NPU_CSR_BASE  = 32'h0003_0000,
   parameter logic [31:0] DMA_CSR_BASE  = 32'h0002_1000,
@@ -713,30 +710,9 @@ module soc_top #(
   );
 
   // ==========================================================
-  // NPU LMEM — 共享 SRAM (从设备 1, DMA/CPU 可访问)
+  // NPU LMEM 已移入 npu_top 内部 (u_npu.u_npu_ram)
+  // Crossbar mst1 直接连接到 npu_top 的 AXI Slave 端口
   // ==========================================================
-  ddr #(
-    .AXI_ID_W(AXI_ID_W), .AXI_ADDR_W(AXI_ADDR_W), .AXI_DATA_W(AXI_DATA_W),
-    .DDR_SIZE_BYTES(NPU_LMEM_SIZE_BYTES), .DDR_INIT_FILE("")
-  ) u_npu_lmem (
-    .aclk(clk), .aresetn(resetn),
-    .s_awvalid(xbar_mst1_awvalid), .s_awready(xbar_mst1_awready),
-    .s_awaddr(xbar_mst1_awaddr), .s_awlen(xbar_mst1_awlen),
-    .s_awsize(xbar_mst1_awsize), .s_awburst(xbar_mst1_awburst),
-    .s_awid(xbar_mst1_awid),
-    .s_wvalid(xbar_mst1_wvalid), .s_wready(xbar_mst1_wready),
-    .s_wdata(xbar_mst1_wdata), .s_wstrb(xbar_mst1_wstrb),
-    .s_wlast(xbar_mst1_wlast),
-    .s_bvalid(xbar_mst1_bvalid), .s_bready(xbar_mst1_bready),
-    .s_bresp(xbar_mst1_bresp), .s_bid(xbar_mst1_bid),
-    .s_arvalid(xbar_mst1_arvalid), .s_arready(xbar_mst1_arready),
-    .s_araddr(xbar_mst1_araddr), .s_arlen(xbar_mst1_arlen),
-    .s_arsize(xbar_mst1_arsize), .s_arburst(xbar_mst1_arburst),
-    .s_arid(xbar_mst1_arid),
-    .s_rvalid(xbar_mst1_rvalid), .s_rready(xbar_mst1_rready),
-    .s_rdata(xbar_mst1_rdata), .s_rresp(xbar_mst1_rresp),
-    .s_rlast(xbar_mst1_rlast), .s_rid(xbar_mst1_rid)
-  );
 
   // ==========================================================
   // NPU CSR AXI→简单CSR桥 + NPU 顶层 (从设备 3)
@@ -870,7 +846,38 @@ module soc_top #(
 
     // MAC debug (SoC中未使用)
     .mac_dbg_tile_valid(),
-    .mac_dbg_tile_data ()
+    .mac_dbg_tile_data (),
+
+    // AXI4 Slave (DMA 写入图像数据到 npu_ram, 连接 crossbar mst1)
+    .s_ram_awvalid (xbar_mst1_awvalid),
+    .s_ram_awready (xbar_mst1_awready),
+    .s_ram_awaddr  (xbar_mst1_awaddr),
+    .s_ram_awlen   (xbar_mst1_awlen),
+    .s_ram_awsize  (xbar_mst1_awsize),
+    .s_ram_awburst (xbar_mst1_awburst),
+    .s_ram_awid    (xbar_mst1_awid),
+    .s_ram_wvalid  (xbar_mst1_wvalid),
+    .s_ram_wready  (xbar_mst1_wready),
+    .s_ram_wdata   (xbar_mst1_wdata),
+    .s_ram_wstrb   (xbar_mst1_wstrb),
+    .s_ram_wlast   (xbar_mst1_wlast),
+    .s_ram_bvalid  (xbar_mst1_bvalid),
+    .s_ram_bready  (xbar_mst1_bready),
+    .s_ram_bresp   (xbar_mst1_bresp),
+    .s_ram_bid     (xbar_mst1_bid),
+    .s_ram_arvalid (xbar_mst1_arvalid),
+    .s_ram_arready (xbar_mst1_arready),
+    .s_ram_araddr  (xbar_mst1_araddr),
+    .s_ram_arlen   (xbar_mst1_arlen),
+    .s_ram_arsize  (xbar_mst1_arsize),
+    .s_ram_arburst (xbar_mst1_arburst),
+    .s_ram_arid    (xbar_mst1_arid),
+    .s_ram_rvalid  (xbar_mst1_rvalid),
+    .s_ram_rready  (xbar_mst1_rready),
+    .s_ram_rdata   (xbar_mst1_rdata),
+    .s_ram_rresp   (xbar_mst1_rresp),
+    .s_ram_rlast   (xbar_mst1_rlast),
+    .s_ram_rid     (xbar_mst1_rid)
   );
 
 endmodule
