@@ -304,19 +304,12 @@ module soc_top #(
   wire [1:0] dma_axi_bresp_xbar, dma_axi_rresp_xbar;
   axi_resp_t dma_axi_bresp, dma_axi_rresp;
 
-  // NPU CSR 简单接口信号
+  // NPU CSR 简单接口信号 (axi2csr → npu_top)
   logic        npu_csr_wr_en;
   logic        npu_csr_rd_en;
   logic [7:0]  npu_csr_addr;
   logic [31:0] npu_csr_wdata;
   logic [31:0] npu_csr_rdata;
-
-  // NPU AXI-CSR 桥寄存器
-  logic                  npu_bvalid_r;
-  logic                  npu_rvalid_r;
-  logic [7:0]            npu_csr_addr_r;
-  logic [31:0]           npu_csr_rdata_r;
-  logic [AXI_ID_W-1:0]  npu_bid_r, npu_rid_r;
 
   // NPU 内部预测信号
   logic       npu_pred_valid_i;
@@ -715,81 +708,52 @@ module soc_top #(
   // ==========================================================
 
   // ==========================================================
-  // NPU CSR AXI→简单CSR桥 + NPU 顶层 (从设备 3)
-  //
-  // 地址映射: CPU 写 0x0003_0000 → crossbar mst3 → 此桥 → npu_top CSR
-  //
-  // CSR寄存器 (npu_csr_regs):
-  //   0x00 CTRL    [W]  bit[0]=start, bit[1]=layer_sel
-  //   0x04 STATUS  [R]  bit[0]=busy,  bit[1]=done
-  //   0x08 SHAPE0  [W]  in_w[5:0], in_h[13:8], in_ch[21:16]
-  //   0x0C SHAPE1  [W]  kernel[2:0], pad[10:8], k_len[25:16]
-  //   0x10 TILE    [W]  row_base[9:0]
-  //   0x20 PRED    [R]  valid[0], class_id[11:8], logit[23:16]
-  //   0x24 LOGIT0  [R]  logits[3:0]
-  //   0x28 LOGIT1  [R]  logits[7:4]
-  //   0x2C LOGIT2  [R]  logits[9:8]
+  // NPU CSR AXI4→CSR 桥 (从设备 3)
+  // axi2csr: crossbar mst3 (AXI4) → npu_top simple CSR
   // ==========================================================
-
-  // AXI write/read → simple CSR bridge (single-beat only)
-  always_ff @(posedge clk or negedge resetn) begin
-    if (!resetn) begin
-      npu_bvalid_r   <= 1'b0;
-      npu_rvalid_r   <= 1'b0;
-      npu_csr_addr_r <= '0;
-      npu_csr_rdata_r <= '0;
-      npu_bid_r      <= '0;
-      npu_rid_r      <= '0;
-    end else begin
-      // Clear on handshake completion
-      if (npu_bvalid_r && xbar_mst3_bready)
-        npu_bvalid_r <= 1'b0;
-      if (npu_rvalid_r && xbar_mst3_rready)
-        npu_rvalid_r <= 1'b0;
-
-      // Write: accept AW+W together, issue B response next cycle
-      if (xbar_mst3_awvalid && xbar_mst3_awready &&
-          xbar_mst3_wvalid  && xbar_mst3_wready) begin
-        npu_bid_r    <= xbar_mst3_awid;
-        npu_bvalid_r <= 1'b1;
-      end
-
-      // Read: accept AR, latch NPU rdata, issue R response next cycle
-      if (xbar_mst3_arvalid && xbar_mst3_arready) begin
-        npu_csr_addr_r  <= xbar_mst3_araddr[7:0];
-        npu_rid_r       <= xbar_mst3_arid;
-        npu_rvalid_r    <= 1'b1;
-        npu_csr_rdata_r <= npu_csr_rdata;   // latch combinational read data
-      end
-    end
-  end
-
-  // Accept only when no pending response
-  wire npu_axi_idle = !npu_bvalid_r && !npu_rvalid_r;
-
-  assign xbar_mst3_awready = npu_axi_idle && xbar_mst3_awvalid && xbar_mst3_wvalid;
-  assign xbar_mst3_wready  = npu_axi_idle && xbar_mst3_awvalid && xbar_mst3_wvalid;
-  assign xbar_mst3_arready = npu_axi_idle && xbar_mst3_arvalid && !xbar_mst3_awvalid;
-
-  // Write response
-  assign xbar_mst3_bvalid = npu_bvalid_r;
-  assign xbar_mst3_bresp  = 2'b00;   // OKAY
-  assign xbar_mst3_bid    = npu_bid_r;
-
-  // Read response
-  assign xbar_mst3_rvalid = npu_rvalid_r;
-  assign xbar_mst3_rdata  = npu_csr_rdata_r;
-  assign xbar_mst3_rresp  = 2'b00;   // OKAY
-  assign xbar_mst3_rid    = npu_rid_r;
-  assign xbar_mst3_rlast  = 1'b1;
-
-  // NPU CSR simple bus
-  assign npu_csr_wr_en = xbar_mst3_awvalid && xbar_mst3_awready &&
-                          xbar_mst3_wvalid  && xbar_mst3_wready;
-  assign npu_csr_rd_en = xbar_mst3_arvalid && xbar_mst3_arready;
-  assign npu_csr_addr  = npu_csr_wr_en ? xbar_mst3_awaddr[7:0] :
-                          npu_csr_rd_en ? xbar_mst3_araddr[7:0] : npu_csr_addr_r;
-  assign npu_csr_wdata = xbar_mst3_wdata;
+  axi2csr #(
+    .AXI_ADDR_W (AXI_ADDR_W),
+    .AXI_DATA_W (AXI_DATA_W),
+    .AXI_ID_W   (AXI_ID_W),
+    .CSR_ADDR_W (8)
+  ) u_npu_csr_bridge (
+    .clk       (clk),
+    .rst_n     (resetn),
+    // AXI4 Slave from crossbar mst3
+    .s_awvalid (xbar_mst3_awvalid),
+    .s_awready (xbar_mst3_awready),
+    .s_awaddr  (xbar_mst3_awaddr),
+    .s_awlen   (xbar_mst3_awlen),
+    .s_awsize  (xbar_mst3_awsize),
+    .s_awid    (xbar_mst3_awid),
+    .s_wvalid  (xbar_mst3_wvalid),
+    .s_wready  (xbar_mst3_wready),
+    .s_wdata   (xbar_mst3_wdata),
+    .s_wstrb   (xbar_mst3_wstrb),
+    .s_wlast   (xbar_mst3_wlast),
+    .s_bvalid  (xbar_mst3_bvalid),
+    .s_bready  (xbar_mst3_bready),
+    .s_bresp   (xbar_mst3_bresp),
+    .s_bid     (xbar_mst3_bid),
+    .s_arvalid (xbar_mst3_arvalid),
+    .s_arready (xbar_mst3_arready),
+    .s_araddr  (xbar_mst3_araddr),
+    .s_arlen   (xbar_mst3_arlen),
+    .s_arsize  (xbar_mst3_arsize),
+    .s_arid    (xbar_mst3_arid),
+    .s_rvalid  (xbar_mst3_rvalid),
+    .s_rready  (xbar_mst3_rready),
+    .s_rdata   (xbar_mst3_rdata),
+    .s_rresp   (xbar_mst3_rresp),
+    .s_rlast   (xbar_mst3_rlast),
+    .s_rid     (xbar_mst3_rid),
+    // Simple CSR to npu_top
+    .csr_wr_en (npu_csr_wr_en),
+    .csr_rd_en (npu_csr_rd_en),
+    .csr_addr  (npu_csr_addr),
+    .csr_wdata (npu_csr_wdata),
+    .csr_rdata (npu_csr_rdata)
+  );
 
   // ==========================================================
   // NPU 顶层实例化
