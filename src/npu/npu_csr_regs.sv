@@ -21,7 +21,6 @@ module npu_csr_regs #(
     input  logic result_valid,
     input  logic [3:0] result_class_id,
     input  logic [7:0] result_logit,
-    input  logic [79:0] result_logits_flat,
 
     output logic start_pulse,
     output logic layer_sel,
@@ -40,9 +39,6 @@ module npu_csr_regs #(
     localparam logic [AW-1:0] REG_SHAPE1   = 8'h0c;
     localparam logic [AW-1:0] REG_TILE     = 8'h10;
     localparam logic [AW-1:0] REG_PRED     = 8'h20;
-    localparam logic [AW-1:0] REG_LOGIT0   = 8'h24;
-    localparam logic [AW-1:0] REG_LOGIT1   = 8'h28;
-    localparam logic [AW-1:0] REG_LOGIT2   = 8'h2c;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -112,22 +108,6 @@ module npu_csr_regs #(
                     csr_rdata[11:8] = result_class_id;
                     csr_rdata[23:16] = result_logit;
                     csr_rdata[31:24] = {8{result_logit[7]}};
-                end
-                REG_LOGIT0: begin
-                    csr_rdata[7:0] = result_logits_flat[0*8 +: 8];
-                    csr_rdata[15:8] = result_logits_flat[1*8 +: 8];
-                    csr_rdata[23:16] = result_logits_flat[2*8 +: 8];
-                    csr_rdata[31:24] = result_logits_flat[3*8 +: 8];
-                end
-                REG_LOGIT1: begin
-                    csr_rdata[7:0] = result_logits_flat[4*8 +: 8];
-                    csr_rdata[15:8] = result_logits_flat[5*8 +: 8];
-                    csr_rdata[23:16] = result_logits_flat[6*8 +: 8];
-                    csr_rdata[31:24] = result_logits_flat[7*8 +: 8];
-                end
-                REG_LOGIT2: begin
-                    csr_rdata[7:0] = result_logits_flat[8*8 +: 8];
-                    csr_rdata[15:8] = result_logits_flat[9*8 +: 8];
                 end
                 default: csr_rdata = '0;
             endcase

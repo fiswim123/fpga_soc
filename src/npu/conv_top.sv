@@ -49,7 +49,6 @@ module conv_top #(
     input  logic result_valid,
     input  logic [3:0] result_class_id,
     input  logic [7:0] result_logit,
-    input  logic [79:0] result_logits_flat,
 
     output logic mac_dbg_tile_valid,
     output logic [(10*8*4*4*8)-1:0] mac_dbg_tile_data,
@@ -176,7 +175,6 @@ module conv_top #(
         .result_valid(result_valid),
         .result_class_id(result_class_id),
         .result_logit(result_logit),
-        .result_logits_flat(result_logits_flat),
         .start_pulse(csr_start_pulse),
         .layer_sel(csr_layer_sel),
         .cfg_in_w(cfg_in_w),

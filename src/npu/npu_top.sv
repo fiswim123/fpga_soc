@@ -221,7 +221,6 @@ module npu_top #(
         .result_valid(fc_pred_valid),
         .result_class_id(fc_pred_class_id),
         .result_logit(fc_pred_logit),
-        .result_logits_flat(fc_logits_flat),
         .mac_dbg_tile_valid(mac_dbg_tile_valid),
         .mac_dbg_tile_data(mac_dbg_tile_data),
         // npu_ram read port
