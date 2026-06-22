@@ -152,23 +152,44 @@ module soc_tb;
 
   // ================================================================
   // Test: DMA → NPU 完整数据通路
-  // DDR(预加载image_data.dat) → DMA搬运 → npu_ram → image_buf → NPU推理
+  // ================================================================
+  // 总线带宽利用率计数器 (DMA AXI Master 通道)
+  // ================================================================
+  int dma_rd_beats = 0;
+  int dma_wr_beats = 0;
+  int dma_active_cycles = 0;
+  bit dma_active = 0;
+
+  // 监控 DMA AXI Master 读/写通道 (仅 DMA 活跃期间计数)
+  always @(posedge clk) begin
+    if (!rst) begin
+      if (dma_active) begin
+        dma_active_cycles <= dma_active_cycles + 1;
+        if (u_soc.dma_axi_rvalid && u_soc.dma_axi_rready)
+          dma_rd_beats <= dma_rd_beats + 1;
+        if (u_soc.dma_axi_wvalid && u_soc.dma_axi_wready)
+          dma_wr_beats <= dma_wr_beats + 1;
+      end
+    end
+  end
+
+  // ================================================================
+  // Test: CPU驱动 DMA→NPU 完整数据通路 + 总线带宽测量
   // ================================================================
   task test_dma_to_npu();
     localparam int IMG_PIXELS = 1024;
-    localparam int DMA_BYTES  = IMG_PIXELS * 4;  // 4096 bytes (32-bit/pixel)
-    localparam logic [31:0] DDR_IMG_BASE = DDR_BASE;           // 0x4000_0000
-    localparam logic [31:0] NPU_RAM_BASE = NPU_LMEM_BASE;      // 0x0000_1000
+    localparam int DMA_BYTES  = IMG_PIXELS * 4;  // 4096 bytes
+    localparam logic [31:0] DDR_IMG_BASE = DDR_BASE;
+    localparam logic [31:0] NPU_RAM_BASE = NPU_LMEM_BASE;
 
     bit mismatch;
     int fd;
     logic [23:0] pixel;
     logic [31:0] ddr_word;
     int addr;
-    realtime t_dma_start, t_dma_done, t_load_start, t_load_done;
-    realtime t_conv_start, t_conv_done, t_fc_start, t_fc_done;
+    realtime t_start, t_dma_done, t_npu_done;
 
-    $display("\n[TB] === Test 9: DMA DDR -> NPU RAM -> Inference ===");
+    $display("\n[TB] === Test: CPU-Driven DMA -> NPU Inference ===");
 
     // ---- Step 1: 预加载 image_data.dat 到 DDR ----
     $display("[TB] Step 1: Preloading image_data.dat to DDR...");
@@ -194,46 +215,42 @@ module soc_tb;
     $fclose(fd);
     $display("[TB]   Loaded %0d pixels (%0d bytes) to DDR @ 0x%08h", IMG_PIXELS, DMA_BYTES, DDR_IMG_BASE);
 
+    // 清零 npu_ram 用于校验
     for (int i = 0; i < DMA_BYTES; i++)
       `NPU_MEM[i] = 8'h00;
     repeat(10) @(posedge clk);
 
-    // ---- Step 2: Force DMA CSR ----
-    $display("[TB] Step 2: Configuring DMA via force...");
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_src_addr[0]  = DDR_IMG_BASE;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_dst_addr[0]  = NPU_RAM_BASE;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_num_bytes[0] = DMA_BYTES;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_wr_mode[0]   = 1'b0;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_rd_mode[0]   = 1'b0;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_enable[0]    = 1'b1;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_max_burst    = 8'd255;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_abort        = 1'b0;
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go           = 1'b0;
-    repeat(3) @(posedge clk);
+    // ---- Step 2: CPU 从 ROM 取指执行，自动配置 DMA + 触发 NPU ----
+    // ROM 已加载 instr_data.dat (asm_to_hex.py 编译)
+    // CPU 程序流程:
+    //   1. 写 DMA CSR: src=DDR, dst=NPU_RAM, bytes=4096, cfg, go
+    //   2. 轮询 DMA STATUS[16]=done
+    //   3. 写 NPU CSR CTRL[0]=1 → 触发 load→conv→fc 流水线
+    //   4. 轮询 NPU PRED[0]=valid
+    $display("[TB] Step 2: CPU executing DMA+NPU program from ROM...");
+    t_start = $realtime;
+    dma_rd_beats = 0;
+    dma_wr_beats = 0;
+    dma_active_cycles = 0;
+    dma_active = 1;
 
-    // ---- Step 3: 启动 DMA ----
-    t_dma_start = $realtime;
-    $display("[TB] Step 3: Starting DMA... @ %0t", t_dma_start);
-    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go = 1'b1;
-    @(posedge clk);
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go;
-
-    // ---- Step 4: 等 DMA 完成 ----
-    wait_dma(2_000_000);
+    // ---- Step 3: 等待 DMA 完成 ----
+    fork
+      begin
+        wait(dma_done || dma_error);
+      end
+      begin
+        #2ms;
+        $error("[TB] TIMEOUT waiting for DMA done");
+        $stop;
+      end
+    join_any disable fork;
     t_dma_done = $realtime;
-    $display("[TB]   DMA done @ %0t  (elapsed: %0t)", t_dma_done, t_dma_done - t_dma_start);
+    dma_active = 0;
+    $display("[TB] Step 3: DMA done @ %0t  (elapsed: %0t)", t_dma_done, t_dma_done - t_start);
+    $display("[TB]   DMA done=%0b, error=%0b", dma_done, dma_error);
 
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_src_addr[0];
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_dst_addr[0];
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_num_bytes[0];
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_wr_mode[0];
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_rd_mode[0];
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_enable[0];
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_max_burst;
-    release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_abort;
-    repeat(5) @(posedge clk);
-
-    // ---- Step 5: 校验 ----
+    // ---- Step 4: 校验 NPU RAM 数据 ----
     mismatch = 0;
     for (int i = 0; i < DMA_BYTES / 4; i++) begin
       logic [31:0] exp_word, got_word;
@@ -248,100 +265,51 @@ module soc_tb;
     end
     check("DMA DDR->NPU RAM", !dma_error && dma_done && !mismatch);
 
-    // ---- Step 6: npu_ram → image_buf ----
-    t_load_start = $realtime;
-    $display("[TB] Step 6: Loading npu_ram -> image_buf... @ %0t", t_load_start);
-    force u_soc.u_npu.img_load_start = 1'b1;
-    @(posedge clk);
-    release u_soc.u_npu.img_load_start;
-
+    // ---- Step 5: 等待 NPU 推理完成 (CPU 轮询 PRED[0]=valid) ----
+    $display("[TB] Step 5: Waiting for NPU inference (CPU polling PRED)...");
     fork
-      begin while (!u_soc.u_npu.img_load_done) @(posedge clk); end
-      begin #200us; $error("[TB] TIMEOUT img_load_done"); $stop; end
-    join_any disable fork;
-    t_load_done = $realtime;
-    $display("[TB]   image_buf loaded @ %0t  (elapsed: %0t)", t_load_done, t_load_done - t_load_start);
-
-    // ---- Step 6b: 启动 conv (带子阶段计时) ----
-    t_conv_start = $realtime;
-    force u_soc.u_npu.u_conv.u_csr.start_pulse = 1'b1;
-    @(posedge clk);
-    release u_soc.u_npu.u_conv.u_csr.start_pulse;
-
-    // 监控 conv_top run_phase 状态变化
-    fork : CONV_MONITOR
-      begin : CONV_DONE_WAIT
-        while (!u_soc.u_npu.u_conv.done) @(posedge clk);
+      begin
+        while (!u_soc.u_npu.pred_valid) @(posedge clk);
       end
-      begin : CONV_PHASE_TRACKER
-        realtime t_l1_dmac_s, t_l1_mac_s, t_l2_dmac_s, t_l2_mac_s;
-        // 等 DMAC 启动 (run_phase 从 P_IDLE 变为 P_LAYER1)
-        @(posedge clk);
-        while (u_soc.u_npu.u_conv.run_phase == 0) @(posedge clk);  // wait P_IDLE→P_LAYER1
-        t_l1_dmac_s = $realtime;
-        $display("[TB]     L1 DMAC start @ %0t", t_l1_dmac_s);
-
-        // 等 L1 DMAC done → MAC start (run_phase stays P_LAYER1, mac_ctrl M_WAIT_DMAC→M_FEED)
-        while (u_soc.u_npu.u_conv.mac_ctrl_state != 2) @(posedge clk);  // M_FEED=2
-        t_l1_mac_s = $realtime;
-        $display("[TB]     L1 MAC   start @ %0t  (L1 DMAC: %0t)", t_l1_mac_s, t_l1_mac_s - t_l1_dmac_s);
-
-        // 等 L2 DMAC (run_phase 变为 P_LAYER2_DMAC=2)
-        while (u_soc.u_npu.u_conv.run_phase != 2) @(posedge clk);
-        t_l2_dmac_s = $realtime;
-        $display("[TB]     L1 done  @ %0t  (L1 MAC: %0t)", t_l2_dmac_s, t_l2_dmac_s - t_l1_mac_s);
-        $display("[TB]     L2 DMAC start @ %0t  (L1 total: %0t)", t_l2_dmac_s, t_l2_dmac_s - t_l1_dmac_s);
-
-        // 等 L2 MAC start (run_phase 变为 P_LAYER2_MAC_PASS0=3)
-        while (u_soc.u_npu.u_conv.run_phase != 3) @(posedge clk);
-        t_l2_mac_s = $realtime;
-        $display("[TB]     L2 MAC   start @ %0t  (L2 DMAC: %0t)", t_l2_mac_s, t_l2_mac_s - t_l2_dmac_s);
-
-        // 等 conv done
-        while (!u_soc.u_npu.u_conv.done) @(posedge clk);
-        $display("[TB]     Conv done     @ %0t  (L2 MAC+pool: %0t)", $realtime, $realtime - t_l2_mac_s);
-      end
-      begin : CONV_TIMEOUT
-        #5ms;
-        $error("[TB] TIMEOUT conv_done");
+      begin
+        #10ms;
+        $error("[TB] TIMEOUT waiting for NPU pred_valid");
         $stop;
       end
-    join_any
-    disable CONV_MONITOR;
-    t_conv_done = $realtime;
-    $display("[TB]   conv total: %0t  (%0d cycles)", t_conv_done - t_conv_start, int'(t_conv_done - t_conv_start) / 10);
-
-    // ---- Step 6c: 启动 FC ----
-    t_fc_start = $realtime;
-    force u_soc.u_npu.fc_start = 1'b1;
-    @(posedge clk);
-    release u_soc.u_npu.fc_start;
-
-    // ---- Step 7: 等推理完成 ----
-    fork
-      begin while (!u_soc.u_npu.pred_valid) @(posedge clk); end
-      begin #2ms; $error("[TB] TIMEOUT pred_valid"); $stop; end
     join_any disable fork;
-    t_fc_done = $realtime;
+    t_npu_done = $realtime;
     repeat(3) @(posedge clk);
 
-    // ---- Step 8: 结果 ----
-    $display("[TB] Step 8: NPU Results:");
-    for (int i = 0; i < 10; i++)
-      $display("  logit[%0d] = %0d", i, $signed(u_soc.u_npu.u_fc.logit_q[i]));
+    // ---- Step 6: 读取结果 ----
+    $display("[TB] Step 6: NPU Results:");
     $display("  pred_class_id = %0d", u_soc.u_npu.pred_class_id);
     $display("  pred_logit    = %0d", $signed(u_soc.u_npu.pred_logit));
 
-    // ---- Timing Summary ----
-    $display("");
-    $display("========== INFERENCE TIMING SUMMARY (200MHz) ==========");
-    $display("  DMA transfer:      %0d cycles", int'(t_dma_done - t_dma_start) / 5);
-    $display("  npu_ram->img_buf:  %0d cycles", int'(t_load_done - t_load_start) / 5);
-    $display("  Conv (L1+L2):      %0d cycles", int'(t_conv_done - t_conv_start) / 5);
-    $display("  FC (GAP+64->10):   %0d cycles", int'(t_fc_done - t_fc_start) / 5);
-    $display("  -------------------------------------------");
-    $display("  TOTAL (DMA->done): %0d cycles  = %0d ns", int'(t_fc_done - t_dma_start) / 5, int'(t_fc_done - t_dma_start));
-    $display("=========================================================");
+    // ---- 总线带宽利用率 (仅 DMA 活跃期间) ----
+    // DMA 读写并发，有效数据 = 搬运量 (4096B)，不重复计算读+写
+    begin
+      int effective_bytes;
+      int max_rw_beats;
+      real utilization;
+
+      effective_bytes = DMA_BYTES;  // 4096B 有效搬运数据
+      max_rw_beats = (dma_rd_beats > dma_wr_beats) ? dma_rd_beats : dma_wr_beats;
+      utilization = (dma_active_cycles > 0) ? (100.0 * effective_bytes / (dma_active_cycles * 4)) : 0.0;
+
+      $display("");
+      $display("========== TIMING & BANDWIDTH (200MHz) ==========");
+      $display("  DMA->NPU total:    %0d cycles", int'(t_npu_done - t_start) / 5);
+      $display("  DMA transfer:      %0d cycles", int'(t_dma_done - t_start) / 5);
+      $display("  NPU inference:     %0d cycles", int'(t_npu_done - t_dma_done) / 5);
+      $display("  -------------------------------------------");
+      $display("  Effective data:    %0d B", effective_bytes);
+      $display("  DMA read beats:    %0d", dma_rd_beats);
+      $display("  DMA write beats:   %0d", dma_wr_beats);
+      $display("  DMA active cycles: %0d", dma_active_cycles);
+      $display("  Bus utilization:   %0.1f%%", utilization);
+      $display("  (eff_bytes / (active_cycles × 4B/beat))");
+      $display("=================================================");
+    end
 
     check("NPU inference", u_soc.u_npu.pred_valid);
   endtask
