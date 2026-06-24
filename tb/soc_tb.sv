@@ -816,6 +816,104 @@ module soc_tb;
   endtask
 
   // ================================================================
+  // Test 28: CPU-driven DMA → NPU inference (end-to-end)
+  // CPU fetches instr_data.dat from ROM, configures DMA via CSR bus,
+  // DMA copies DDR image to NPU LMEM, CPU triggers NPU, polls pred_valid.
+  // Result is left in CPU registers (s2=class_id, s3=logit) and
+  // readable via NPU CSR PRED register.
+  // ================================================================
+  task test_cpu_dma_npu();
+    $display("\n[TB] === Test 28: CPU-driven DMA + NPU Inference ===");
+    begin
+      int fd;
+      logic [23:0] pixel;
+      logic [31:0] ddr_word;
+      int addr;
+      int timeout;
+      bit ok;
+
+      // 1. Pre-fill DDR with image_data.dat (same format as test_npu_conv1)
+      fd = $fopen("../src/npu/image_data.dat", "r");
+      if (fd == 0) begin
+        $error("[TB] Cannot open image_data.dat");
+        check("CPU DMA+NPU", 0);
+        return;
+      end
+      addr = 0;
+      for (int i = 0; i < 1024; i++) begin
+        $fscanf(fd, "%h", pixel);
+        ddr_word = {8'h00, pixel};
+        `DDR_MEM[addr+3] = ddr_word[31:24];
+        `DDR_MEM[addr+2] = ddr_word[23:16];
+        `DDR_MEM[addr+1] = ddr_word[15:8];
+        `DDR_MEM[addr+0] = ddr_word[7:0];
+        addr += 4;
+      end
+      $fclose(fd);
+      $display("[TB]   DDR pre-loaded with 1024 pixels (4096 bytes)");
+
+      // 2. Reset CPU so it starts fetching from ROM
+      rst = 1'b1;
+      repeat(20) @(posedge clk);
+      rst = 1'b0;
+      $display("[TB]   CPU released from reset, executing ROM...");
+
+      // 3. Wait for NPU pred_valid (CPU triggers full pipeline via CSR write to CTRL[0])
+      //    The CPU writes 0x01 to NPU CSR 0x00030000, which triggers:
+      //    img_load → conv → FC → pred_valid
+      timeout = 0;
+      ok = 0;
+      while (timeout < 80_000_000) begin
+        @(posedge clk);
+        timeout++;
+        if (u_soc.u_npu.pred_valid) begin
+          ok = 1;
+          break;
+        end
+      end
+
+      if (!ok) begin
+        $error("[TB] CPU DMA+NPU TIMEOUT: pred_valid not asserted (%0d ns)", timeout * 5);
+        check("CPU DMA+NPU", 0);
+        return;
+      end
+
+      repeat(5) @(posedge clk);
+
+      // 4. Read result from NPU output ports (directly from npu_top)
+      begin
+        logic [3:0]  class_id;
+        logic [7:0]  logit;
+        class_id = u_soc.u_npu.pred_class_id;
+        logit    = u_soc.u_npu.pred_logit;
+        $display("[TB]   pred_valid  = %0b", u_soc.u_npu.pred_valid);
+        $display("[TB]   class_id    = %0d", class_id);
+        $display("[TB]   logit       = %0d", $signed(logit));
+        $display("[TB]   completed in %0d cycles", timeout);
+
+        // 5. Verify pred_valid
+        ok = u_soc.u_npu.pred_valid;
+        if (!ok) $display("[TB]   pred_valid deasserted unexpectedly");
+
+        // 6. Verify DMA transferred data: check first 64 bytes of NPU RAM vs DDR
+        if (ok) begin
+          for (int i = 0; i < 64; i++) begin
+            if (`NPU_MEM[i] !== `DDR_MEM[i]) begin
+              $display("[TB]   DMA MISMATCH at byte %0d: NPU=0x%02h DDR=0x%02h",
+                       i, `NPU_MEM[i], `DDR_MEM[i]);
+              ok = 0;
+              break;
+            end
+          end
+          if (ok) $display("[TB]   DMA data verified: NPU RAM[0..63] matches DDR");
+        end
+
+        check("CPU DMA+NPU", ok);
+      end
+    end
+  endtask
+
+  // ================================================================
   // 主流程
   // ================================================================
   initial begin
@@ -852,6 +950,7 @@ module soc_tb;
     test_npu_ppu();       // 9. NPU PPU 检查
     test_npu_repeat();    // 16. NPU 重复推理
     test_npu_conv2();     // 15. NPU 完整 conv1+conv2 流程
+    test_cpu_dma_npu();   // 28. CPU-driven DMA + NPU inference
 
     $display("\n[TB] ==============================");
     $display("[TB] Summary: %0d PASS, %0d FAIL", pass_cnt, fail_cnt);
