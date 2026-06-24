@@ -558,6 +558,109 @@ module soc_tb;
   endtask
 
   // ================================================================
+  // Test 18: DMA 4KB 边界穿越 (覆盖 burst_r4KB 拆分逻辑)
+  // ================================================================
+  task test_dma_4kb_boundary();
+    bit mismatch;
+    $display("\n[TB] === Test 18: DMA 4KB boundary crossing ===");
+    // 从 0x3FE0 开始搬 256B，跨越 0x4000 边界
+    for(int i=0;i<256;i++) `DDR_MEM['h3FE0+i] = 8'hC0+i[7:0];
+    for(int i=0;i<256;i++) `NPU_MEM[i] = 8'h00;
+    repeat(10) @(posedge clk);
+    dma_force_csr(DDR_BASE+32'h3FE0, NPU_LMEM_BASE, 32'd256, 8'd255);
+    repeat(3) @(posedge clk);
+    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go = 1'b1;
+    @(posedge clk); release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go;
+    wait_dma(2_000_000); dma_release_csr(); repeat(5) @(posedge clk);
+    mismatch = 0;
+    for(int i=0;i<256;i++) if(`NPU_MEM[i] !== 8'(8'hC0+i[7:0])) mismatch = 1;
+    check("DMA 4KB boundary", !dma_error && dma_done && !mismatch);
+  endtask
+
+  // ================================================================
+  // Test 19: DMA 多次连续搬运 (覆盖 FSM 反复 IDLE→RUN→DONE)
+  // ================================================================
+  task test_dma_sequential();
+    bit mismatch;
+    $display("\n[TB] === Test 19: DMA sequential transfers ===");
+    for(int round=0; round<4; round++) begin
+      for(int i=0;i<128;i++) `DDR_MEM['h9000+round*256+i] = 8'(round*64+i[7:0]);
+      for(int i=0;i<128;i++) `NPU_MEM[i] = 8'h00;
+      repeat(5) @(posedge clk);
+      dma_force_csr(DDR_BASE+32'h9000+round*256, NPU_LMEM_BASE, 32'd128, 8'd16);
+      repeat(3) @(posedge clk);
+      force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go = 1'b1;
+      @(posedge clk); release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go;
+      wait_dma(2_000_000); dma_release_csr(); repeat(5) @(posedge clk);
+      mismatch = 0;
+      for(int i=0;i<128;i++) if(`NPU_MEM[i] !== 8'(round*64+i[7:0])) mismatch = 1;
+      if(mismatch || dma_error) begin
+        $display("[TB]   FAIL at round %0d", round);
+        check("DMA sequential", 0);
+        return;
+      end
+    end
+    check("DMA sequential", 1);
+  endtask
+
+  // ================================================================
+  // Test 20: DMA 搬运到 NPU RAM 边界 (覆盖地址范围检查)
+  // ================================================================
+  task test_dma_npu_ram_boundary();
+    bit mismatch;
+    $display("\n[TB] === Test 20: DMA to NPU RAM boundary ===");
+    // 搬到最后 64B
+    for(int i=0;i<64;i++) `DDR_MEM['hA000+i] = 8'hDD;
+    for(int i=0;i<64;i++) `NPU_MEM[4032+i] = 8'h00;
+    repeat(10) @(posedge clk);
+    dma_force_csr(DDR_BASE+32'hA000, NPU_LMEM_BASE+32'hFC0, 32'd64, 8'd16);
+    repeat(3) @(posedge clk);
+    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go = 1'b1;
+    @(posedge clk); release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go;
+    wait_dma(2_000_000); dma_release_csr(); repeat(5) @(posedge clk);
+    mismatch = 0;
+    for(int i=0;i<64;i++) if(`NPU_MEM[4032+i] !== 8'hDD) mismatch = 1;
+    check("DMA NPU boundary", !dma_error && dma_done && !mismatch);
+  endtask
+
+  // ================================================================
+  // Test 21: DDR 大范围读写 (覆盖 FSM 状态切换密度)
+  // ================================================================
+  task test_ddr_dense();
+    logic[31:0] rdata;
+    bit ok;
+    $display("\n[TB] === Test 21: DDR dense R/W ===");
+    repeat(20) @(posedge clk); ok=1;
+    // 1024 次连续写入
+    for(int i=0;i<1024;i++) ddr_write32(DDR_BASE+i*4, 32'hCAFE_0000+i);
+    // 1024 次连续读出
+    for(int i=0;i<1024;i++) begin
+      ddr_read32(DDR_BASE+i*4, rdata);
+      if(rdata !== (32'hCAFE_0000+i)) ok=0;
+    end
+    check("DDR dense", ok);
+  endtask
+
+  // ================================================================
+  // Test 22: DMA 读写地址在 DDR 末尾 (覆盖地址范围边界)
+  // ================================================================
+  task test_dma_ddr_tail();
+    bit mismatch;
+    $display("\n[TB] === Test 22: DMA DDR tail ===");
+    for(int i=0;i<64;i++) `DDR_MEM['h3FFC0+i] = 8'hEE;
+    for(int i=0;i<64;i++) `NPU_MEM[i] = 8'h00;
+    repeat(10) @(posedge clk);
+    dma_force_csr(DDR_BASE+32'h3FFC0, NPU_LMEM_BASE, 32'd64, 8'd16);
+    repeat(3) @(posedge clk);
+    force u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go = 1'b1;
+    @(posedge clk); release u_soc.u_dma.u_dma_axi_wrapper.u_dma_csr.reg_go;
+    wait_dma(2_000_000); dma_release_csr(); repeat(5) @(posedge clk);
+    mismatch = 0;
+    for(int i=0;i<64;i++) if(`NPU_MEM[i] !== 8'hEE) mismatch = 1;
+    check("DMA DDR tail", !dma_error && dma_done && !mismatch);
+  endtask
+
+  // ================================================================
   // 主流程
   // ================================================================
   initial begin
@@ -578,6 +681,11 @@ module soc_tb;
     test_dma_reverse();   // 4. DMA 反向搬运
     test_dma_two_desc();  // 5. DMA 双描述符
     test_dma_boundary();  // 10. DMA 边界数据
+    test_dma_4kb_boundary(); // 18. DMA 4KB 边界穿越
+    test_dma_sequential();   // 19. DMA 连续多次搬运
+    test_dma_npu_ram_boundary(); // 20. DMA NPU RAM 边界
+    test_dma_ddr_tail();     // 22. DMA DDR 末尾
+    test_ddr_dense();        // 21. DDR 大范围读写
     test_npu_csr();       // 8. NPU CSR 寄存器读写
     test_npu_conv1();     // 6. NPU conv1 + maxpool
     test_npu_fc();        // 7. NPU FC + 预测

@@ -21,7 +21,7 @@ OL;O;2020.4;71
 R0
 Xamba_axi_pkg
 Z2 DXx6 sv_std 3 std 0 22 9oUSJO;AeEaW`l:M@^WG92
-Z3 !s110 1782297030
+Z3 !s110 1782298261
 !i10b 1
 !s100 YhYHMR0JgWVeZkXUY8>l13
 Z4 !s11b Dg1SIo80bB@j0V0VzS_@n1
@@ -31,14 +31,14 @@ R0
 Z5 w1774520101
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/inc/amba_axi_pkg.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/inc/amba_axi_pkg.sv
-!i122 54
+!i122 96
 Z6 L0 4 0
 VM]4<;o6BTN2gM1JB<6f4z1
 Z7 OL;L;2020.4;71
 r1
 !s85 0
 31
-Z8 !s108 1782297030.000000
+Z8 !s108 1782298261.000000
 !s107 C:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\dma\inc\amba_axi.svh|C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/inc/amba_axi_pkg.sv|
 !s90 +cover=bcfst|C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/inc/amba_axi_pkg.sv|
 !i113 0
@@ -57,7 +57,7 @@ R0
 w1776709364
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axi2axi_lite.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axi2axi_lite.sv
-!i122 57
+!i122 99
 L0 4 267
 Z11 VDg1SIo80bB@j0V0VzS_@n1
 R7
@@ -83,7 +83,7 @@ R0
 w1782113786
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axi2csr.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axi2csr.sv
-!i122 57
+!i122 99
 L0 7 121
 R11
 R7
@@ -109,7 +109,7 @@ R0
 w1775587063
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axi_lite2axi.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axi_lite2axi.sv
-!i122 57
+!i122 99
 L0 1 250
 R11
 R7
@@ -135,7 +135,7 @@ R0
 w1775483818
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_crossbar_top.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_crossbar_top.sv
-!i122 57
+!i122 99
 L0 17 1589
 R11
 R7
@@ -161,7 +161,7 @@ R0
 Z14 w1775144442
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_if.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_if.sv
-!i122 57
+!i122 99
 L0 7 710
 R11
 R7
@@ -187,7 +187,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_switch.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_switch.sv
-!i122 57
+!i122 99
 L0 7 164
 R11
 R7
@@ -213,7 +213,7 @@ R0
 w1775483421
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_switch_rd.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_switch_rd.sv
-!i122 57
+!i122 99
 L0 7 155
 R11
 R7
@@ -239,7 +239,7 @@ R0
 w1775483372
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_switch_wr.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_mst_switch_wr.sv
-!i122 57
+!i122 99
 L0 7 208
 R11
 R7
@@ -265,7 +265,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_pipeline.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_pipeline.sv
-!i122 57
+!i122 99
 L0 7 95
 R11
 R7
@@ -291,7 +291,7 @@ R0
 w1775483508
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_round_robin.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_round_robin.sv
-!i122 57
+!i122 99
 L0 13 160
 R11
 R7
@@ -317,7 +317,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_round_robin_core.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_round_robin_core.sv
-!i122 57
+!i122 99
 L0 67 2710
 R11
 R7
@@ -343,7 +343,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_scfifo.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_scfifo.sv
-!i122 57
+!i122 99
 L0 25 155
 R11
 R7
@@ -369,7 +369,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_scfifo_ram.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_scfifo_ram.sv
-!i122 57
+!i122 99
 L0 7 33
 R11
 R7
@@ -395,7 +395,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_scfifo_regfile.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_scfifo_regfile.sv
-!i122 57
+!i122 99
 L0 7 43
 R11
 R7
@@ -421,7 +421,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_if.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_if.sv
-!i122 57
+!i122 99
 L0 7 698
 R11
 R7
@@ -447,7 +447,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_ooo.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_ooo.sv
-!i122 57
+!i122 99
 L0 13 322
 R11
 R7
@@ -473,7 +473,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_switch.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_switch.sv
-!i122 57
+!i122 99
 L0 7 184
 R11
 R7
@@ -499,7 +499,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_switch_rd.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_switch_rd.sv
-!i122 57
+!i122 99
 L0 7 282
 R11
 R7
@@ -525,7 +525,7 @@ R0
 R14
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_switch_wr.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_slv_switch_wr.sv
-!i122 57
+!i122 99
 L0 7 309
 R11
 R7
@@ -551,7 +551,7 @@ R0
 w1775484398
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_switch_top.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/axi_crossbar/axicb_switch_top.sv
-!i122 57
+!i122 99
 L0 7 553
 R11
 R7
@@ -577,7 +577,7 @@ R0
 w1782290971
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/conv_top.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/conv_top.sv
-!i122 59
+!i122 101
 L0 3 547
 R11
 R7
@@ -603,7 +603,7 @@ R0
 w1775553250
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/ddr.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/ddr.sv
-!i122 60
+!i122 102
 L0 1 315
 R11
 R7
@@ -635,7 +635,7 @@ R0
 Z19 w1782108130
 Z20 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_axi_if.sv
 Z21 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_axi_if.sv
-!i122 58
+!i122 100
 L0 10 506
 R7
 31
@@ -664,7 +664,7 @@ R20
 R21
 Z24 FC:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\dma\inc\amba_axi.svh
 Z25 FC:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\dma\inc\dma_pkg.svh
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -694,7 +694,7 @@ R0
 w1775637344
 Z26 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_axi_top.sv
 Z27 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_axi_top.sv
-!i122 58
+!i122 100
 L0 10 198
 R7
 31
@@ -724,7 +724,7 @@ R26
 R27
 R24
 R25
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -754,7 +754,7 @@ R0
 w1775637348
 Z29 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_axi_wrapper.sv
 Z30 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_axi_wrapper.sv
-!i122 58
+!i122 100
 L0 10 116
 R7
 31
@@ -784,7 +784,7 @@ R29
 R30
 R24
 R25
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -814,7 +814,7 @@ R0
 w1775636130
 Z31 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_csr.sv
 Z32 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_csr.sv
-!i122 58
+!i122 100
 L0 4 346
 R7
 31
@@ -844,7 +844,7 @@ R31
 R32
 R24
 R25
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -874,7 +874,7 @@ R0
 R5
 Z33 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_fifo.sv
 Z34 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_fifo.sv
-!i122 58
+!i122 100
 L0 10 93
 R7
 31
@@ -904,7 +904,7 @@ R33
 R34
 R24
 R25
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -934,7 +934,7 @@ R0
 w1775654877
 Z35 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_fsm.sv
 Z36 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_fsm.sv
-!i122 58
+!i122 100
 L0 10 173
 R7
 31
@@ -964,7 +964,7 @@ R35
 R36
 R24
 R25
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -994,7 +994,7 @@ R0
 w1775640886
 Z37 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_func_wrapper.sv
 Z38 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_func_wrapper.sv
-!i122 58
+!i122 100
 L0 10 161
 R7
 31
@@ -1024,7 +1024,7 @@ R37
 R38
 R24
 R25
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -1054,7 +1054,7 @@ R0
 Z39 w1782108161
 Z40 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_streamer.sv
 Z41 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/dma_streamer.sv
-!i122 58
+!i122 100
 L0 10 375
 R7
 31
@@ -1084,7 +1084,7 @@ R40
 R41
 R24
 R25
-!i122 58
+!i122 100
 R6
 R7
 31
@@ -1110,7 +1110,7 @@ R28
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/dma/inc/dma_utils_pkg.sv
 R25
 R24
-!i122 55
+!i122 97
 L0 3 0
 VKVN]5101Ch9Elm@B^aWzo0
 R7
@@ -1136,7 +1136,7 @@ R0
 w1782105691
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/dmac_im2col_stream.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/dmac_im2col_stream.sv
-!i122 59
+!i122 101
 L0 8 160
 R11
 R7
@@ -1162,7 +1162,7 @@ R0
 w1782105764
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/dmac_image_sa_writer.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/dmac_image_sa_writer.sv
-!i122 59
+!i122 101
 L0 8 211
 R11
 R7
@@ -1188,7 +1188,7 @@ R0
 Z42 w1781582400
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/dmac_tile_scheduler.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/dmac_tile_scheduler.sv
-!i122 59
+!i122 101
 L0 6 92
 R11
 R7
@@ -1214,7 +1214,7 @@ R0
 w1781678477
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/gap_fc_logits.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/gap_fc_logits.sv
-!i122 59
+!i122 101
 L0 6 307
 R11
 R7
@@ -1240,7 +1240,7 @@ R0
 R42
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/mac_array_40x32_stream.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/mac_array_40x32_stream.sv
-!i122 59
+!i122 101
 L0 6 282
 R11
 R7
@@ -1266,7 +1266,7 @@ R0
 Z43 w1781496000
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/mm_systolic_4x4.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/mm_systolic_4x4.sv
-!i122 59
+!i122 101
 L0 6 159
 R11
 R7
@@ -1292,7 +1292,7 @@ R0
 w1782114767
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_csr_regs.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_csr_regs.sv
-!i122 59
+!i122 101
 L0 6 112
 R11
 R7
@@ -1318,7 +1318,7 @@ R0
 w1781678517
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_dmac_frontend.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_dmac_frontend.sv
-!i122 59
+!i122 101
 L0 4 113
 R11
 R7
@@ -1344,7 +1344,7 @@ R0
 w1782105533
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_ram.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_ram.sv
-!i122 59
+!i122 101
 L0 1 225
 R11
 R7
@@ -1370,7 +1370,7 @@ R0
 w1782114845
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_top.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/npu_top.sv
-!i122 59
+!i122 101
 L0 3 310
 R11
 R7
@@ -1396,7 +1396,7 @@ R0
 R43
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/pe.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/pe.sv
-!i122 59
+!i122 101
 L0 6 93
 R11
 R7
@@ -1420,7 +1420,7 @@ R0
 Z44 w1774520100
 Z45 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/cpu/picorv32.v
 Z46 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/cpu/picorv32.v
-!i122 56
+!i122 98
 L0 62 2106
 R11
 R7
@@ -1444,7 +1444,7 @@ R0
 Z49 w1775588123
 Z50 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/cpu/picorv32_axi.v
 Z51 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/cpu/picorv32_axi.v
-!i122 56
+!i122 98
 L0 7 256
 R11
 R7
@@ -1468,7 +1468,7 @@ R0
 R49
 R50
 R51
-!i122 56
+!i122 98
 L0 426 118
 R11
 R7
@@ -1492,7 +1492,7 @@ R0
 R49
 R50
 R51
-!i122 56
+!i122 98
 L0 388 32
 R11
 R7
@@ -1516,7 +1516,7 @@ R0
 R49
 R50
 R51
-!i122 56
+!i122 98
 L0 356 26
 R11
 R7
@@ -1540,7 +1540,7 @@ R0
 R49
 R50
 R51
-!i122 56
+!i122 98
 L0 269 81
 R11
 R7
@@ -1564,7 +1564,7 @@ R0
 R44
 R45
 R46
-!i122 56
+!i122 98
 L0 2420 91
 R11
 R7
@@ -1588,7 +1588,7 @@ R0
 R44
 R45
 R46
-!i122 56
+!i122 98
 L0 2318 96
 R11
 R7
@@ -1612,7 +1612,7 @@ R0
 R44
 R45
 R46
-!i122 56
+!i122 98
 L0 2197 120
 R11
 R7
@@ -1636,7 +1636,7 @@ R0
 R44
 R45
 R46
-!i122 56
+!i122 98
 L0 2174 17
 R11
 R7
@@ -1662,7 +1662,7 @@ R0
 R42
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/ppu_maxpool.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/ppu_maxpool.sv
-!i122 59
+!i122 101
 L0 5 108
 R11
 R7
@@ -1688,7 +1688,7 @@ R0
 R43
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/ram.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/ram.sv
-!i122 59
+!i122 101
 L0 3 35
 R11
 R7
@@ -1714,7 +1714,7 @@ R0
 R42
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/rom.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/rom.sv
-!i122 59
+!i122 101
 L0 3 28
 R11
 R7
@@ -1730,24 +1730,24 @@ R10
 R1
 vsoc_tb
 R2
-R3
+Z52 !s110 1782298262
 !i10b 1
-!s100 >a>lD2fT37fYIW6D=JmhF0
+!s100 RLg9^^a7d]:GTO8gA]7a53
 R4
-I6S6AC3Th2mn^kem[JUfU63
+ITNPE=ZeIR9L6@^?d6JLZU3
 S1
 R0
-w1782295791
+w1782297490
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/tb/soc_tb.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/tb/soc_tb.sv
-!i122 62
-L0 4 595
+!i122 104
+L0 4 703
 R11
 R7
 r1
 !s85 0
 31
-R8
+!s108 1782298262.000000
 !s107 C:/Users/14658/Desktop/phytium_cadence/vivado_soc/tb/soc_tb.sv|
 !s90 +cover=bcfst|C:/Users/14658/Desktop/phytium_cadence/vivado_soc/tb/soc_tb.sv|
 !i113 0
@@ -1758,7 +1758,7 @@ vsoc_top
 R2
 R17
 DXx4 work 15 soc_top_sv_unit 0 22 IlA_WNno^oXZbX[_G@BUO3
-R3
+R52
 R11
 r1
 !s85 0
@@ -1768,16 +1768,16 @@ IB7==@nP4nlQdJBhgnZ_SM3
 !s105 soc_top_sv_unit
 S1
 R0
-Z52 w1782147217
-Z53 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv
-Z54 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv
-!i122 61
+Z53 w1782147217
+Z54 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv
+Z55 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv
+!i122 103
 L0 6 842
 R7
 31
 R8
-Z55 !s107 C:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\..\src\dma\inc\dma_pkg.svh|C:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\..\src\dma\inc\amba_axi.svh|C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv|
-Z56 !s90 +cover=bcfst|C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv|
+Z56 !s107 C:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\..\src\dma\inc\dma_pkg.svh|C:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\..\src\dma\inc\amba_axi.svh|C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv|
+Z57 !s90 +cover=bcfst|C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/soc_top.sv|
 !i113 0
 R9
 R10
@@ -1785,7 +1785,7 @@ R1
 Xsoc_top_sv_unit
 R2
 R17
-R3
+R52
 VIlA_WNno^oXZbX[_G@BUO3
 r1
 !s85 0
@@ -1795,18 +1795,18 @@ IIlA_WNno^oXZbX[_G@BUO3
 !i103 1
 S1
 R0
-R52
 R53
 R54
+R55
 FC:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\..\src\dma\inc\amba_axi.svh
 FC:\Users\14658\Desktop\phytium_cadence\vivado_soc\src\..\src\dma\inc\dma_pkg.svh
-!i122 61
+!i122 103
 R6
 R7
 31
 R8
-R55
 R56
+R57
 !i113 0
 R9
 R10
@@ -1823,7 +1823,7 @@ R0
 w1781678528
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/tb_conv_top.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/tb_conv_top.sv
-!i122 59
+!i122 101
 L0 3 442
 R11
 R7
@@ -1849,7 +1849,7 @@ R0
 w1781678556
 8C:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/tb_npu_top.sv
 FC:/Users/14658/Desktop/phytium_cadence/vivado_soc/src/npu/tb_npu_top.sv
-!i122 59
+!i122 101
 L0 3 619
 R11
 R7
