@@ -41,3 +41,4 @@ sim/wlft*
 # Project root ModelSim artifacts
 work/
 transcript
+modelsim.ini
