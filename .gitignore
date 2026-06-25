@@ -37,3 +37,7 @@ src/npu/export_cifar/data/
 # ModelSim temp files
 vish_stacktrace.vstf
 sim/wlft*
+
+# Project root ModelSim artifacts
+work/
+transcript
