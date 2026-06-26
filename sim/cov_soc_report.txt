@@ -1,0 +1,101 @@
+Coverage Report Summary Data by instance
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu/u_conv/u_csr
+=== Design Unit: work.npu_csr_regs
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                        18        18         0   100.00%
+    Statements                      37        37         0   100.00%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu/u_conv/u_image_rom
+=== Design Unit: work.rom
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                         2         2         0   100.00%
+    Statements                       4         4         0   100.00%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu/u_conv/u_conv1_rom
+=== Design Unit: work.rom
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                         2         2         0   100.00%
+    Statements                       4         4         0   100.00%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu/u_conv/u_conv2_rom
+=== Design Unit: work.rom
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                         2         2         0   100.00%
+    Statements                       4         4         0   100.00%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu/u_conv/u_mac
+=== Design Unit: work.mac_array_40x32_stream
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                        25        24         1    96.00%
+    Conditions                       6         5         1    83.33%
+    Expressions                      3         3         0   100.00%
+    FSM States                       4         4         0   100.00%
+    FSM Transitions                  6         4         2    66.66%
+    Statements                      85        84         1    98.82%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu/u_conv
+=== Design Unit: work.conv_top
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                        35        34         1    97.14%
+    Conditions                      11        11         0   100.00%
+    Expressions                      9         8         1    88.88%
+    FSM States                       9         9         0   100.00%
+    FSM Transitions                 22        13         9    59.09%
+    Statements                     140       139         1    99.28%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu/u_fc
+=== Design Unit: work.gap_fc_logits
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                        30        30         0   100.00%
+    Conditions                       4         4         0   100.00%
+    FSM States                      11        11         0   100.00%
+    FSM Transitions                 21        20         1    95.23%
+    Statements                     138       134         4    97.10%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc/u_npu
+=== Design Unit: work.npu_top
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                        14        14         0   100.00%
+    Conditions                       3         3         0   100.00%
+    Expressions                      6         6         0   100.00%
+    FSM States                       4         4         0   100.00%
+    FSM Transitions                  6         4         2    66.66%
+    Statements                      17        17         0   100.00%
+
+=================================================================================
+=== Instance: /soc_tb/u_soc
+=== Design Unit: work.soc_top
+=================================================================================
+    Enabled Coverage              Bins      Hits    Misses  Coverage
+    ----------------              ----      ----    ------  --------
+    Branches                         2         2         0   100.00%
+    Statements                      31        31         0   100.00%
+
+
+Total Coverage By Instance (filtered view): 93.66%
+
