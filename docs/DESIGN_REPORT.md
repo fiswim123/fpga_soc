@@ -18,9 +18,9 @@ output: word_document
 | 指标 | 设计值 | 赛题要求 |
 |------|--------|----------|
 | 工艺节点 | 28nm（目标ASIC） | — |
-| CPU核 | PicoRV32（RISC-V RV32IMC） | 指定三选一 |
-| NPU架构 | 可配置脉动阵列，8核×16×16 PE | 4×4基础 |
-| NPU峰值算力 | **0.82 TOPS@INT8**（理论峰值） | ≥0.5 TOPS |
+| CPU核 | PicoRV32（RISC-V RV32I） | 指定三选一 |
+| NPU架构 | 40×32脉动阵列（80个4×4子阵列，1280 MAC） | 4×4基础 |
+| NPU峰值算力 | **0.51 TOPS@INT8**（理论峰值） | ≥0.5 TOPS |
 | 总线带宽利用率 | **86.7%**（Burst传输） | ≥60%（基础）/≥80%（优化） |
 | RTL仿真频率 | 200 MHz | 200 MHz |
 | 代码覆盖率 | **97.2%** | ≥95% |
@@ -152,7 +152,7 @@ AXI4（Advanced eXtensible Interface 4）是ARM公司定义的高性能片上总
 | 用途 | CSR寄存器访问 | 批量数据传输 |
 | 面积 | 小 | 大 |
 
-本设计中，**AXI-Lite 32bit**用于CPU配置NPU控制寄存器，**AXI-Full 64bit**用于NPU批量读写SRAM数据。
+本设计中，**AXI-Lite**（经`axi_lite2axi`桥转为AXI4）用于CPU配置DMA/NPU控制寄存器，**AXI4-Full 32bit**用于DMA批量搬运数据。
 
 #### 1.3.3 总线带宽利用率模型
 
@@ -226,26 +226,25 @@ Output = im2col_matrix × weight_matrix  →  (OH×OW) × OC
 
 #### 1.5.1 本设计算力计算
 
-本设计采用**8个NPU计算核**并行架构，每核包含16×16=256个INT8 MAC单元（由16个4×4基础Tile拼成）。
+本设计采用**40行×32列**脉动阵列，由80个4×4基础子阵列（`mm_systolic_4x4`）拼接而成，每个子阵列含16个INT8 MAC单元。
 
-**总MAC数量**：8 × 16 × 16 = **2048 MAC**
+**总MAC数量**：40 × 32 = **1280 MAC**
 
 **理论峰值算力@200MHz**：
 
-$$TOPS_{peak} = \frac{2048 \times 2 \times 200 \times 10^6}{10^{12}} = 0.8192 \text{ TOPS@INT8}$$
+$$TOPS_{peak} = \frac{1280 \times 2 \times 200 \times 10^6}{10^{12}} = 0.512 \text{ TOPS@INT8}$$
 
-满足基础指标≥0.5 TOPS要求，接近优化指标1 TOPS目标。
+满足基础指标≥0.5 TOPS要求。
 
-#### 1.5.2 扩展到1+ TOPS路径
+#### 1.5.2 扩展路径
 
-通过增加计算核数至12核或扩展单核阵列至32×32，可实现1 TOPS以上算力：
+通过扩大阵列规模或增加并行核数，可进一步提升算力：
 
 | 配置 | MAC数量 | 峰值算力@200MHz |
 |------|---------|-----------------|
-| 4核×16×16 | 1024 | 0.41 TOPS |
-| 8核×16×16（当前）| 2048 | 0.82 TOPS |
-| 12核×16×16 | 3072 | 1.23 TOPS |
-| 16核×16×16 | 4096 | 1.64 TOPS |
+| 40×32（当前）| 1280 | 0.51 TOPS |
+| 40×64 | 2560 | 1.02 TOPS |
+| 64×64 | 4096 | 1.64 TOPS |
 
 ### 1.6 低功耗设计原理
 
@@ -257,7 +256,7 @@ $$P_{dynamic} = \alpha \times C \times V_{DD}^2 \times f$$
 
 时钟门控将活动因子α在空闲周期降为0，从而消除对应模块的动态功耗。
 
-**本设计实现**：在8个NPU计算核的时钟树上分别插入ICG，由NPU控制器根据核是否被当前层使用来独立控制。对于仅使用4核的浅层网络，其余4核时钟完全关断。
+**本设计实现**：在NPU脉动阵列的时钟树上插入ICG，由NPU控制器根据当前推理阶段（DMAC/MAC/FC）独立控制。当NPU处于空闲状态（`top_state == T_IDLE`）时，MAC阵列时钟完全关断。
 
 #### 1.6.2 动态频率调整（DFS）
 
@@ -287,72 +286,82 @@ $$P_{dynamic} = \alpha \times C \times V_{DD}^2 \times f$$
 #### 2.1.1 顶层架构
 
 ```
-                          ┌──────────────────────────────────────┐
-                          │            SoC Top                    │
-                          │                                      │
-  ┌──────────┐           ┌┴─────────────────────────┐           │
-  │  JTAG    │◄─────────►│       AXI Interconnect     │           │
-  │  Debug   │           │      (Shared Crossbar)     │           │
-  └──────────┘           └┬──────┬──────┬──────┬─────┘           │
-                          │      │      │      │                 │
-              ┌───────────┘      │      │      └───────────┐     │
-              ▼                  ▼      ▼                  ▼     │
-        ┌──────────┐   ┌──────────┐  ┌──────────┐   ┌──────────┐│
-        │ PicoRV32 │   │   NPU    │  │   DMA    │   │  SRAM    ││
-        │  (CPU)   │   │ Subsystem│  │Controller│   │ 64KB x 4 ││
-        └──────────┘   └──────────┘  └──────────┘   └──────────┘│
-             │                                               │    │
-             │ AXI-Lite (32b)                                │    │
-             │ CSR Access                                    │    │
-             └───────────────────────────────────────────────┘    │
-                                                                  │
-                          ┌──────────────────────────────────────┐│
-                          │        Clock & Power Management       ││
-                          │   (CG, DFS, PG Control)               ││
-                          └──────────────────────────────────────┘│
-                          └──────────────────────────────────────┘
+                          ┌──────────────────────────────────────────────────────────┐
+                          │                    soc_top (顶层集成)                      │
+                          │                                                          │
+  ┌──────────┐            │  ┌────────────────────────────────────────────────────┐   │
+  │          │  AXI-Lite  │  │            4×4 AXI Crossbar                        │   │
+  │ PicoRV32 ├────────────┼─►│  axicb_crossbar_top                                │   │
+  │  (CPU)   │  →AXI4桥   │  │  优先级分层Round-Robin仲裁 + 乱序完成              │   │
+  │          │            │  │                                                    │   │
+  │ 4KB ROM  │            │  │  slv0(CPU)  slv1(DMA)  slv2(预留)  slv3(预留)      │   │
+  │ 4KB RAM  │            │  │      │           │          │           │           │   │
+  └──────────┘            │  │      ▼           ▼          ▼           ▼           │   │
+                          │  │  ┌─────────────────────────────────────────────┐    │   │
+                          │  │  │         axicb_switch_top (中央交换矩阵)      │    │   │
+                          │  │  │   路由分发 × 4  →  信号重排序  →  仲裁汇聚 ×4│    │   │
+                          │  │  └──────┬──────────┬──────────┬──────────┬─────┘    │   │
+                          │  │         ▼          ▼          ▼          ▼          │   │
+                          │  │  ┌──────────┐ ┌──────────┐ ┌────────┐ ┌────────┐   │   │
+                          │  │  │ mst0:DDR │ │mst1:NPU  │ │mst2:DMA│ │mst3:NPU│   │   │
+                          │  │  │256KB     │ │LMEM 4KB  │ │CSR 4KB │ │CSR 4KB │   │   │
+                          │  │  └────┬─────┘ └────┬─────┘ └───┬────┘ └───┬────┘   │   │
+                          │  └───────┼────────────┼───────────┼──────────┼─────────┘   │
+                          │          │            │           │          │             │
+                          │          ▼            ▼           ▼          ▼             │
+                          │  ┌──────────┐ ┌──────────────┐ ┌────────┐ ┌────────────┐  │
+                          │  │   DDR    │ │  npu_ram     │ │  DMA   │ │  npu_top   │  │
+                          │  │  256KB   │ │  4KB(AXI-S)  │ │csr_regs│ │   (NPU)    │  │
+                          │  │程序/栈/堆│ │+ 组合逻辑读口│ │        │ │            │  │
+                          │  └──────────┘ └──────────────┘ └────────┘ └────────────┘  │
+                          └──────────────────────────────────────────────────────────┘
 ```
 
 #### 2.1.2 地址空间划分（由AXI Crossbar Slave端口定义）
 
-| 地址范围 (Crossbar) | 大小 | 目标设备 | Crossbar端口 | 外部位宽 | 说明 |
-|----------------------|------|----------|-------------|----------|------|
-| 0x0000 – 0x0FFF | 4KB | **DDR** (程序/数据) | mst0 | 32-bit | 程序代码+栈+堆+全局数据 |
-| 0x1000 – 0x1FFF | 4KB | **NPU_LMEM** (NPU本地存储) | mst1 | 32-bit | 权重+输入/输出特征图 |
-| 0x2000 – 0x2FFF | 4KB | **DMA_REG** (DMA CSR) | mst2 | 32-bit | DMA控制寄存器访问 |
-| 0x3000 – 0x3FFF | 4KB | **NPU_REG** (NPU CSR) | mst3 | 32-bit | NPU控制寄存器访问 |
+| 地址范围 | 大小 | 目标设备 | Crossbar端口 | 外部位宽 | 说明 |
+|----------|------|----------|-------------|----------|------|
+| `0x0000_0000` – `0x0000_0FFF` | 4KB | **CPU ROM** | CPU内部直连 | 32-bit | 启动程序与任务指令（`picorv32_local_rom`） |
+| `0x1000_0000` – `0x1000_0FFF` | 4KB | **CPU RAM** | CPU内部直连 | 32-bit | CPU本地数据与临时变量（`picorv32_local_ram`） |
+| `0x4000_0000` – `0x4003_FFFF` | 256KB | **DDR** | mst0 | 32-bit | 程序代码+栈+堆+全局数据+原始输入图像 |
+| `0x0000_1000` – `0x0002_0FFF` | 128KB | **NPU LMEM** | mst1 | 32-bit | NPU本地存储（`npu_ram`），接收DMA搬运的图像数据 |
+| `0x0002_1000` – `0x0002_1FFF` | 4KB | **DMA CSR** | mst2 | 32-bit | DMA控制/状态寄存器 |
+| `0x0003_0000` – `0x0003_0FFF` | 4KB | **NPU CSR** | mst3 | 32-bit | NPU控制/状态寄存器 |
 
-> 注：Crossbar内部统一32-bit转发，CPU(32b)→DDR(32b)同宽直通；DMA(32b)→NPU_LMEM(32b)同宽直通。
+> 注：Crossbar内部统一32-bit转发，所有端口DATA_RATIO=1同宽直通。CPU本地ROM/RAM由`picorv32_mem_router`在CPU内部直接路由，不经过Crossbar。
 
 ### 2.2 模块划分
 
 | 模块编号 | 模块名称 | 功能概述 | 接口类型 |
 |----------|----------|----------|----------|
 | M1 | `soc_top` | 顶层集成，实例化所有子模块 | 外部IO |
-| M2 | `picorv32_axi_adapter` | PicoRV32 CPU核 + AXI4适配器 | AXI4 Master (32b) |
+| M2 | `picorv32_axi` | PicoRV32 CPU核 + AXI4-Lite适配器 + 本地ROM/RAM | AXI4-Lite Master |
 | M3 | `axicb_crossbar_top` | 4×4 AXI4 Crossbar（32b内部总线）| AXI4 Master/Slave |
-| M4 | `npu_top` | NPU顶层：含控制器+8计算核+数据通路 | AXI4 Master (32b) + AXI-Lite Slave |
-| M5 | `npu_core` ×8 | 单NPU计算核：16×16脉动阵列 | 内部接口 |
-| M6 | `pe_4x4` ×4×8 | 4×4 PE基础瓦片 | 内部接口 |
-| M7 | `dma_axi_top` | DMA控制器（7层分层设计，含CSR+FSM+Streamer+FIFO+AXI_IF）| AXI4 Master (32b) + AXI-Lite Slave |
-| M8 | `dma_streamer` ×2 | 读/写流控引擎（Burst生成+4KB边界+非对齐）| 内部接口 |
-| M9 | `dma_axi_if` | AXI4 Master接口引擎（5通道+Outstanding+SVA）| AXI4 Master (32b) |
-| M10 | `dma_fifo` | 主数据FIFO（32b读写缓冲）| 内部接口 |
-| M11 | `axicb_round_robin` | 优先级分层Round-Robin仲裁器（4级）| 内部接口 |
-| M12 | `axicb_slv_ooo` | 乱序完成管理器（per-ID FIFO）| 内部接口 |
-| M13 | `npu_sequencer` | NPU硬件层序列器（Conv/Pool/FC/Activation）| 内部接口 |
+| M4 | `npu_top` | NPU顶层：4状态FSM + conv_top + gap_fc_logits + npu_ram | AXI4 Slave + CSR接口 |
+| M5 | `conv_top` | 卷积引擎：CSR + DMAC + MAC阵列 + MaxPool | 内部接口 |
+| M6 | `mac_array_40x32_stream` | 40×32脉动阵列（80个mm_systolic_4x4，1280 PE）| 内部接口 |
+| M7 | `mm_systolic_4x4` ×80 | 4×4脉动子阵列（含偏置加+ReLU+量化）| 内部接口 |
+| M8 | `pe` ×1280 | 单个MAC处理单元（INT8乘累加/加法模式）| 内部接口 |
+| M9 | `dmac_image_sa_writer` | im2col DMA引擎（S_IDLE→S_RUN→S_DRAIN→S_DONE）| 内部接口 |
+| M10 | `dmac_im2col_stream` | 组合逻辑im2col变换核 + 图像加载FSM | 内部接口 |
+| M11 | `ppu_maxpool` | 流式2×2 MaxPool后处理单元 | 内部接口 |
+| M12 | `gap_fc_logits` | GAP + FC(64→10) + argmax分类器 | 内部接口 |
+| M13 | `npu_ram` | NPU本地存储（4KB，AXI4 Slave + 组合逻辑读口）| AXI4 Slave |
+| M14 | `npu_csr_regs` | NPU CSR寄存器文件（6个寄存器）| 简单CSR接口 |
+| M15 | `dma_axi_top` | DMA控制器（CSR+FSM+Streamer+FIFO+AXI_IF）| AXI4 Master + AXI-Lite Slave |
+| M16 | `axi2csr` | AXI4 → 简单CSR协议桥（Crossbar→NPU CSR）| AXI4 Slave / CSR Master |
 
 ### 2.3 技术选型
 
 | 设计维度 | 选择 | 理由 |
 |----------|------|------|
-| CPU架构 | RISC-V RV32IMC (PicoRV32) | 开源、自带AXI4接口、可自定义扩展 |
-| NPU架构 | 多核权重静止脉动阵列 | 规整可扩展、数据复用率高、易映射CNN |
-| 总线协议 | AXI4 + AXI4-Lite | 赛题要求，业界标准，IP生态丰富 |
-| 总线互连 | AXI Crossbar (Shared Bus) | 支持多主多从并行访问，提升带宽利用率 |
-| 数据精度 | INT8（主要）/ FP32（可选）| 赛题考核INT8，边缘推理INT8精度足够 |
-| NPU控制接口 | AXI4-Lite Memory-Mapped CSR | 赛题强制要求（非PCPI），通用性好 |
-| 存储器 | 片上SRAM 256KB（4 Bank）| 统一编址，零拷贝交互 |
+| CPU架构 | RISC-V RV32I (PicoRV32) | 开源、自带AXI4接口、赛题指定三选一 |
+| NPU架构 | 40×32权重静止脉动阵列（80个4×4子阵列，1280 MAC）| 规整可扩展、数据复用率高、易映射CNN |
+| 总线协议 | AXI4 + AXI4-Lite | 赛题要求，业界标准 |
+| 总线互连 | 4×4 AXI4 Crossbar | 支持CPU+DMA并行访问不同从设备 |
+| 数据精度 | INT8 | 赛题考核INT8，边缘推理精度足够 |
+| NPU控制接口 | AXI4-Lite → 简单CSR（axi2csr桥）| 赛题强制要求（非PCPI）|
+| 存储器 | DDR 256KB + NPU LMEM 4KB + 内部~328KB | 统一编址，DMA搬运，NPU近算缓存 |
 | 仿真工具 | VS Code + iverilog | 赛题极力推荐，开源免费 |
 | 低功耗 | 时钟门控 + DFS + 电源门控 | 覆盖基础与加分要求 |
 
@@ -362,32 +371,28 @@ $$P_{dynamic} = \alpha \times C \times V_{DD}^2 \times f$$
 
 | 信号名 | 方向 | 位宽 | 描述 |
 |--------|------|------|------|
-| `clk_sys` | Input | 1 | 系统主时钟 200MHz |
-| `rst_n` | Input | 1 | 异步复位，低有效 |
-| `jtag_tck/tms/tdi/tdo` | Input/Output | 4 | JTAG调试接口 |
-| `uart_tx/rx` | Output/Input | 2 | 调试串口 |
-| `gpio[7:0]` | Input/Output | 8 | 通用IO，连接外部中断 |
-| `irq_npu` | Output | 1 | NPU任务完成中断 |
+| `clk` | Input | 1 | 系统主时钟 200MHz |
+| `rst` | Input | 1 | 同步复位，高有效 |
+| `dma_done_o` | Output | 1 | DMA传输完成标志 |
+| `dma_error_o` | Output | 1 | DMA错误标志 |
+| `cpu_trap_o` | Output | 1 | CPU陷阱信号 |
+| `npu_busy` | Output | 1 | NPU运行忙状态 |
+| `npu_done` | Output | 1 | NPU推理完成 |
+| `npu_pred_valid` | Output | 1 | 预测结果有效 |
+| `npu_pred_class_id` | Output | 4 | 预测类别（0-9） |
+| `npu_pred_logit` | Output | 8 | 预测logit值 |
 
-#### 2.4.2 AXI4-Full 接口信号（NPU数据面）
+#### 2.4.2 AXI4 CSR接口信号（NPU控制面）
 
-| 通道 | 信号组 | 位宽 | 描述 |
-|------|--------|------|------|
-| AW | `m_axi_awid/awaddr/awlen/awsize/awburst/awvalid/awready` | 6+32+8+3+2+1+1 | 写地址通道 |
-| W | `m_axi_wdata/wstrb/wlast/wvalid/wready` | 64+8+1+1+1 | 写数据通道 |
-| B | `m_axi_bid/bresp/bvalid/bready` | 6+2+1+1 | 写响应通道 |
-| AR | `m_axi_arid/araddr/arlen/arsize/arburst/arvalid/arready` | 6+32+8+3+2+1+1 | 读地址通道 |
-| R | `m_axi_rid/rdata/rresp/rlast/rvalid/rready` | 6+64+2+1+1+1 | 读数据通道 |
+NPU的CSR寄存器通过`axi2csr`桥接器接入Crossbar mst3端口，接口为简单的写使能/读使能+地址+数据信号，非标准AXI4-Lite端口。
 
-#### 2.4.3 AXI4-Lite 接口信号（NPU控制面）
-
-| 通道 | 信号组 | 位宽 |
-|------|--------|------|
-| AW | `s_axil_awaddr/awvalid/awready` | 12+1+1 |
-| W | `s_axil_wdata/wstrb/wvalid/wready` | 32+4+1+1 |
-| B | `s_axil_bresp/bvalid/bready` | 2+1+1 |
-| AR | `s_axil_araddr/arvalid/arready` | 12+1+1 |
-| R | `s_axil_rdata/rresp/rvalid/rready` | 32+2+1+1 |
+| 信号 | 位宽 | 方向 | 描述 |
+|------|------|------|------|
+| `csr_wr_en` | 1 | I | 写使能 |
+| `csr_rd_en` | 1 | I | 读使能 |
+| `csr_addr` | 8 | I | 寄存器地址（偏移） |
+| `csr_wdata` | 32 | I | 写数据 |
+| `csr_rdata` | 32 | O | 读数据 |
 
 ---
 
@@ -589,174 +594,490 @@ program.hex (Verilog $readmemh 格式)
 
 #### 3.2.1 NPU顶层架构
 
+NPU顶层模块`npu_top`整合了卷积引擎`conv_top`、后处理单元`ppu_maxpool`、分类器`gap_fc_logits`以及AXI4 Slave存储`npu_ram`，形成完整的CNN推理加速器。其模块层次结构如下：
+
 ```
-                            ┌───────────────┐
-                            │   npu_top     │
-                            │               │
-   AXI-Lite ──────────────► │ ┌───────────┐ │
-   (CSR)                    │ │ npu_ctrl  │ │
-                            │ │+sequencer │ │
-                            │ └─────┬─────┘ │
-                            │       │       │
-                            │  ┌────┴────┐  │
-                            │  │  task   │  │
-                            │  │dispatch │  │
-                            │  └────┬────┘  │
-                            │       │       │
-                            │  ┌────┴────┐  │
-                            │  │ 8×npu   │  │
-                            │  │  core   │  │──── AXI4 Master
-                            │  └─────────┘  │     (64-bit)
-                            │               │
-                            │ ┌───────────┐ │
-                            │ │global_buf │ │
-                            │ │  (32KB)   │ │
-                            │ └───────────┘ │
-                            └───────────────┘
+npu_top                                    ← 顶层，4状态FSM控制 conv→fc 流程
+├── npu_ram                                ← AXI4 Slave + 组合逻辑读口，4KB图像缓存
+└── conv_top                               ← 卷积层控制器
+    ├── npu_csr_regs                       ← CSR寄存器（CPU通过AXI-Lite写入）
+    ├── rom ×3                             ← 图像/Conv1权重/Conv2权重 ROM（调试用）
+    ├── dmac_image_sa_writer               ← im2col DMA引擎
+    │   └── dmac_im2col_stream             ← 组合逻辑im2col变换核 + 图像加载FSM
+    ├── ram (image_sa_ram)                 ← im2col矩阵存储，5600行 × 320bit
+    ├── mac_array_40x32_stream             ← 40×32脉动阵列（80个mm_systolic_4x4）
+    │   └── mm_systolic_4x4 ×80           ← 4×4脉动子阵列（含偏置加+ReLU+量化）
+    │       └── pe ×16                     ← 单个MAC处理单元（共1280个PE）
+    ├── ram (result_ram)                   ← 卷积结果存储，1024行 × 256bit
+    ├── ram (pool_ram)                     ← MaxPool结果存储，256行 × 256bit
+    └── ppu_maxpool                        ← 流式2×2最大池化单元
+└── gap_fc_logits                          ← GAP + FC(64→10) + argmax分类器
 ```
+
+**NPU顶层端口：**
+
+| 端口组 | 信号 | 方向 | 描述 |
+|--------|------|------|------|
+| CSR总线 | `csr_wr_en`, `csr_rd_en`, `csr_addr[7:0]`, `csr_wdata[31:0]`, `csr_rdata[31:0]` | I/O | CPU配置接口（经axi2csr桥接） |
+| 状态输出 | `busy`, `done` | O | NPU运行状态 |
+| 预测输出 | `pred_valid`, `pred_class_id[3:0]`, `pred_logit[7:0]` | O | 推理结果 |
+| AXI4 Slave | `s_ram_aw*`, `s_ram_w*`, `s_ram_b*`, `s_ram_ar*`, `s_ram_r*` | S | npu_ram的AXI4从接口（DMA写入图像数据） |
+| 调试端口 | `dbg_sa_rd_*`, `dbg_result_rd_*`, `dbg_pool_rd_*`, `dbg_logit_rd_*` | O | 内部存储器调试读口 |
 
 #### 3.2.2 NPU控制寄存器（CSR）映射
 
-| 偏移 | 寄存器名 | 位宽 | 访问 | 描述 |
-|------|----------|------|------|------|
-| 0x00 | `NPU_CTRL` | 32 | RW | [0] 使能, [1] 启动, [2] 中断使能 |
-| 0x04 | `NPU_STATUS` | 32 | RO | [0] 空闲, [1] 忙, [2] 完成, [3] 错误 |
-| 0x08 | `NPU_SRC_ADDR` | 32 | RW | 输入特征图基地址（SRAM地址） |
-| 0x0C | `NPU_WGT_ADDR` | 32 | RW | 权重基地址 |
-| 0x10 | `NPU_DST_ADDR` | 32 | RW | 输出特征图基地址 |
-| 0x14 | `NPU_LAYER_CFG` | 32 | RW | [7:0]层类型, [15:8]激活函数, [16]池化使能 |
-| 0x18 | `NPU_DIM0` | 32 | RW | [15:0]输入H, [31:16]输入W |
-| 0x1C | `NPU_DIM1` | 32 | RW | [15:0]输入IC, [31:16] 卷积K |
-| 0x20 | `NPU_DIM2` | 32 | RW | [15:0]输出OC, [31:16] Stride |
-| 0x24 | `NPU_DIM3` | 32 | RW | [15:0] OH, [31:16] OW |
-| 0x28 | `NPU_CORE_MASK` | 32 | RW | [7:0] 每bit使能对应NPU Core |
-| 0x2C | `NPU_CLK_DIV` | 32 | RW | [1:0] 00=÷1, 01=÷2, 10=÷4, 11=÷8 |
-| 0x30 | `NPU_PG_EN` | 32 | RW | [7:0] 每bit控制对应Core电源门控 |
-| 0x34 | `NPU_PERF_CNT` | 32 | RO | 当前层运算周期计数 |
+NPU CSR模块（`npu_csr_regs`）通过`axi2csr`桥接器接入Crossbar mst3端口，CPU以AXI-Lite单拍方式访问。
 
-#### 3.2.3 PE（Processing Element）设计
+| 偏移 | 寄存器名 | 位宽 | 访问 | 位域描述 |
+|------|----------|------|------|----------|
+| `0x00` | `REG_CTRL` | 32 | W/R | [0] `start_pulse`（写1启动，单周期自清零）；[1] `layer_sel`（读/写，层选择） |
+| `0x04` | `REG_STATUS` | 32 | R | [0] `dmac_busy`；[1] `dmac_done` |
+| `0x08` | `REG_SHAPE0` | 32 | RW | [5:0] `cfg_in_w`（输入宽度，默认32）；[13:8] `cfg_in_h`（输入高度，默认32）；[21:16] `cfg_in_ch`（输入通道数，默认3） |
+| `0x0C` | `REG_SHAPE1` | 32 | RW | [2:0] `cfg_kernel`（卷积核大小，默认5）；[10:8] `cfg_pad`（填充大小，默认2）；[25:16] `cfg_k_len`（im2col展开长度，默认75） |
+| `0x10` | `REG_TILE` | 32 | RW | [9:0] `cfg_row_base`（tile行基地址） |
+| `0x20` | `REG_PRED` | 32 | R | [0] `result_valid`；[11:8] `result_class_id`；[23:16] `result_logit`；[31:24] `result_logit`符号扩展 |
 
-每个PE执行INT8乘加运算：`psum_out = psum_in + w × a_in`
+**复位默认值**：`cfg_in_w=32`, `cfg_in_h=32`, `cfg_in_ch=3`, `cfg_kernel=5`, `cfg_pad=2`, `cfg_k_len=75`, `cfg_row_base=0`。
 
-```
-           +----------------------------------+
-           |             PE                   |
-           |                                  |
-  w_in ----┤──┐    ┌─────┐                    |
-           |  │    │     │                    |
-           |  ├────┤ W   ├──┐                 |
-           |  │    │ Reg │  │   ┌─────┐      |
-           |  │    └─────┘  │   │ INT8 │      |
-           |  │              ├───┤ Mul  ├──┐   |
-  a_in ----┼──┤              │   └──┬──┘  │   |
-           |  │              │      │     │   |
-           |  │              │   ┌──┴──┐  │   |
-  psum_in -┼──┤              │   │ INT32│  │   |
-           |  │              │   │ Add  ├──┼───┤── psum_out
-           |  │              │   └─────┘  │   |
-           |  │   ┌──────┐   │            │   |
-           |  └───┤ Reg  ├───┘            │   |
-           |      │(pipe)│                │   |
-           |      └──────┘                │   |
-           |                              │   |
-           |   a_out = a_in (forward)     │   |
-           +----------------------------------+
-                    |                  |
-                    v                  v
-                  a_out            psum_out
-```
+#### 3.2.3 NPU顶层状态机
 
-**PE关键设计参数：**
-- 输入：8-bit权重 (W)、8-bit输入激活 (A_in)、32-bit部分和 (Psum_in)
-- 输出：32-bit部分和 (Psum_out)、8-bit激活直通 (A_out)
-- 流水线：2级（乘法1级 + 加法1级）
-- 输出部分和位宽32-bit以防止累加溢出
+`npu_top`内部包含一个4状态FSM（`top_state_t`），控制从启动到推理完成的全流程：
 
-#### 3.2.4 4×4 PE Tile 设计
+| 状态 | 编码 | 描述 |
+|------|------|------|
+| `T_IDLE` | 0 | 空闲，等待CSR写入CTRL[0]启动脉冲 |
+| `T_LOAD_IMG` | 1 | 等待`npu_ram`→`image_buf`图像拷贝完成 |
+| `T_WAIT_CONV` | 2 | 等待卷积引擎完成（Conv1 + Conv2） |
+| `T_WAIT_FC` | 3 | 等待FC层完成，随后脉冲`top_done_pulse`并返回`T_IDLE` |
 
 ```
-  a_in[3:0] ──→┌─────┬─────┬─────┬─────┐
-                │PE00 │PE01 │PE02 │PE03 │
-                ├─────┼─────┼─────┼─────┤
-                │PE10 │PE11 │PE12 │PE13 │
-                ├─────┼─────┼─────┼─────┤
-                │PE20 │PE21 │PE22 │PE23 │
-                ├─────┼─────┼─────┼─────┤
-                │PE30 │PE31 │PE32 │PE33 │
-  psum_in[3:0]──→└─────┴─────┴─────┴─────┘──→ psum_out[3:0]
-                                              (纵向累积)
-  w_in[3:0] (预加载后驻留)
-
-  数据流方向:
-  · 输入激活 a: 左→右 (每列共享输入)
-  · 部分和 psum: 上→下 (每行分别累积)
-  · 权重 w: 预加载后驻留 PE 内部寄存器
+                CSR写CTRL[0]=1         img_load_done          conv_done           fc_done
+T_IDLE ──────────────────→ T_LOAD_IMG ──────────→ T_WAIT_CONV ──────────→ T_WAIT_FC ──────→ T_IDLE
+  ▲                                                                                          │
+  └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-#### 3.2.5 16×16 NPU Core 设计（由16个4×4 Tile拼接）
+**关键控制信号**：
+- `busy = conv_busy || fc_busy || (top_state != T_IDLE)`
+- `fc_clear`：与`start_pulse`同一CSR写操作产生，用于清零GAP累加器
+- 启动写入同时设置`layer_sel`，决定Conv1（`layer_sel=0`）或Conv2（`layer_sel=1`）的参数选择
+
+#### 3.2.4 卷积引擎（`conv_top`）
+
+卷积引擎是NPU的核心计算模块，内部包含im2col变换、脉动阵列计算、结果写回和池化后处理四个阶段，由两层FSM协调控制。
+
+**层参数配置：**
+
+| 参数 | Layer 1 (Conv1) | Layer 2 (Conv2) |
+|------|-----------------|-----------------|
+| 输入特征图 | 32×32×3 (RGB) | 16×16×32 |
+| 输出特征图 | 32×32×32 | 16×16×64 |
+| 卷积核 | 5×5, pad=2 | 5×5, pad=2 |
+| K_DIM (im2col展开长度) | 75 (3×5×5) | 800 (32×5×5) |
+| TILE_COUNT | 26 (⌈1024/40⌉) | 7 (⌈256/40⌉) per pass |
+| 输出通道 | 32 | 64（需2次Pass） |
+| 量化移位 | out_shift=7 | out_shift=8 |
+
+**运行阶段FSM（`run_phase_t`）：**
+
+| 状态 | 描述 |
+|------|------|
+| `P_IDLE` | 空闲 |
+| `P_LAYER1` | Conv1：DMAC填充SA RAM → MAC计算26个tile → MaxPool |
+| `P_LAYER2_DMAC` | Conv2 DMAC：填充SA RAM（`layer_sel=1`，从`pool_buf`读取） |
+| `P_LAYER2_MAC_PASS0` | Conv2 MAC Pass 0：计算输出通道0-31（7个tile） |
+| `P_LAYER2_MAC_PASS1` | Conv2 MAC Pass 1：计算输出通道32-63（7个tile，`out_pass=1`） |
+
+**MAC控制FSM（`mac_ctrl_state_t`）：**
+
+| 状态 | 描述 |
+|------|------|
+| `M_IDLE` | 等待`csr_start_pulse` |
+| `M_WAIT_DMAC` | 等待`dmac_done`（im2col数据填充完成） |
+| `M_FEED` | 从image_sa_ram逐行读取320bit数据，分解为40个`a_lane`广播到脉动阵列；同时从`weight_buf`/`weight2_buf`读取权重行分解为32个`w_lane`；`feed_count`从0递增到`active_k-1` |
+| `M_WAIT_TILE` | 等待tile计算完成（8周期drain），然后推进到下一个tile或切换阶段 |
+
+**M_FEED状态详细行为**：
+- 每周期发出`mac_sa_rd_en`，地址为`tile_idx * active_k + mac_reads_issued`
+- 读出的320bit行数据分解为40个8bit lane广播到脉动阵列的行输入
+- 权重从`weight_buf[k]`（256bit，32通道）或`weight2_buf[k]`（512bit，64通道低/高32通道由`out_pass`选择）读取
+- 当`mac_feeds_sent == active_k - 1`时，转入`M_WAIT_TILE`
+
+**M_WAIT_TILE状态详细行为**：
+- 收到`mac_tile_valid`后，推进到下一个tile
+- 所有tile完成（`mac_last_tile_captured && mac_result_done && ppu_done_seen`）后：
+  - Layer1完成 → 转入`P_LAYER2_DMAC`，触发`dmac_start`并设置`layer_sel=1`
+  - Layer2 Pass0完成 → 转入`P_LAYER2_MAC_PASS1`，设置`mac_out_pass=1`，PPU配置`addr_offset=1`
+  - Layer2 Pass1完成 → 脉冲`top_done_pulse`，返回`P_IDLE`
+
+#### 3.2.5 处理单元（PE）设计
+
+`pe.sv`实现单个MAC单元，支持有符号/无符号INT8乘累加和加法两种模式。
+
+**端口信号：**
+
+| 信号 | 位宽 | 方向 | 描述 |
+|------|------|------|------|
+| `row_i` / `col_i` | 8 | I | 有符号8-bit输入（激活/权重） |
+| `din_valid` | 1 | I | 数据有效标志 |
+| `dot_k` | 16 | I | 点积长度（每个tile的K维度） |
+| `flush` | 1 | I | 清零累加器，启动新点积 |
+| `signed_mode` | 1 | I | 1=有符号乘法，0=无符号 |
+| `add_mode` | 1 | I | 1=加法模式，0=乘累加模式 |
+| `res` | 32 | O | 32-bit累加结果 |
+| `res_valid` | 1 | O | 结果有效标志 |
+| `row_o` / `col_o` | 8 | O | 寄存器打拍后的直通输出（脉动传播） |
+
+**行为描述：**
+- **MAC模式**（`add_mode=0`）：每个`din_valid`周期执行 `acc += row_i × col_i`（INT8×INT8→INT32累加）。当`mac_cnt == dot_k - 1`时，输出`res = acc + row_i × col_i`并断言`res_valid`。
+- **flush处理**：`flush`信号清零累加器和计数器。若`flush`与`din_valid`同时有效，从当前beat开始新的累加（不丢失第一个数据）。
+- **脉动传播**：`row_o`和`col_o`为`row_i`和`col_i`的寄存器打拍输出，实现1周期延迟的脉动数据传递。
+
+#### 3.2.6 4×4脉动子阵列（`mm_systolic_4x4`）
+
+每个`mm_systolic_4x4`实例包含16个PE（4×4网格），采用**时间偏斜（skew）对齐**确保所有PE在同一时刻看到属于同一次乘法的数据：
 
 ```
-  ┌──────┬──────┬──────┬──────┐
-  │T00   │T01   │T02   │T03   │ ← 4×4 Tile
-  │ 4×4  │ 4×4  │ 4×4  │ 4×4  │
-  ├──────┼──────┼──────┼──────┤
-  │T10   │T11   │T12   │T13   │
-  │ 4×4  │ 4×4  │ 4×4  │ 4×4  │
-  ├──────┼──────┼──────┼──────┤
-  │T20   │T21   │T22   │T23   │
-  │ 4×4  │ 4×4  │ 4×4  │ 4×4  │
-  ├──────┼──────┼──────┼──────┤
-  │T30   │T31   │T32   │T33   │
-  │ 4×4  │ 4×4  │ 4×4  │ 4×4  │
-  └──────┴──────┴──────┴──────┘
-          16×16 = 256 PE
+行方向偏斜:                     列方向偏斜:
+  Row 0: A数据无延迟              Col 0: W数据无延迟
+  Row 1: A数据延迟1周期           Col 1: W数据延迟1周期
+  Row 2: A数据延迟2周期           Col 2: W数据延迟2周期
+  Row 3: A数据延迟3周期           Col 3: W数据延迟3周期
 ```
 
-每个Core配上：
-- **输入Buffer** (64B 寄存器组)：缓存当前计算列的输入激活
-- **权重Buffer** (256×8b = 256B)：预加载256个INT8权重
-- **输出累加器** (16×32b = 64B)：缓存部分和
+偏斜通过移位寄存器链实现（`row_d1[1:3]`, `row_d2[2:3]`, `row_d3[3:3]`，列方向同理）。`bar_valid_delay[2:0]`为3级valid流水线，跟踪数据在阵列中的传播。当`add_mode=1`时，旁路延迟寄存器，所有PE获得同周期数据。
 
-#### 3.2.6 硬件层序列器（NPU Sequencer）
+**后处理流水线（组合逻辑）：**
 
-NPU Sequencer是一个硬件状态机，负责自动执行各CNN层的硬件原生运算，无需CPU逐层配置。
+每个`mm_systolic_4x4`在点积完成后依次执行：
 
-**支持的操作类型：**
+```systemverilog
+// 1. 量化截断：32bit → 8bit
+pe_res_i8[m][n] = {pe_res[m][n][31], pe_res[m][n][out_shift +: 7]};
 
-| 操作码 | 操作 | 描述 |
-|--------|------|------|
-| 0x01 | CONV2D | 卷积（im2col地址生成 → 矩阵乘 → 偏置加 → 激活）|
-| 0x02 | FC | 全连接（矩阵-向量乘 → 偏置加 → 激活）|
-| 0x03 | MAXPOOL | 最大池化（2×2窗口，stride=2）|
-| 0x04 | AVGPOOL | 平均池化 |
-| 0x05 | RELU | 逐元素ReLU激活 |
-| 0x06 | ADD | 逐元素加法（残差连接用）|
-| 0x07 | CONCAT | 通道拼接 |
+// 2. 偏置加（符号扩展后相加）
+biased_val[m][n] = sign_extend(pe_res_i8) + sign_extend(bias_vec[n]);
 
-**卷积层执行流程：**
-```
-Step 1: 加载权重到各Core权重Buffer（AXI Burst读取）
-Step 2: 将输出通道按Core数量分片（8 Core各自计算OC/8个输出通道）
-Step 3: For each output row tile:
-  Step 3a: im2col地址生成，读取输入特征图到Input Buffer
-  Step 3b: 启动脉动阵列计算（权重已驻留）
-  Step 3c: 收集部分和，偏置加、激活函数、池化（可选，流水线执行）
-  Step 3d: 结果写回输出SRAM（AXI Burst写入）
-Step 4: 产生完成中断
+// 3. ReLU + INT8饱和
+pe_post_i8[m][n] = (relu_en && biased_val <= 0) ? 8'sd0 : sat_i8(biased_val);
 ```
 
-#### 3.2.7 动态可调脉动阵列（加分项）
+**`sat_i8`饱和函数**：`vin > 127 → 127; vin < -128 → -128; 否则取低8位`。
 
-通过配置`NPU_CORE_MASK`和`NPU_LAYER_CFG`寄存器，可在运行时动态调整阵列拓扑：
+**偏置选择**：`bias_val = layer_sel ? bias2_vec : bias_vec`，由当前层决定从Conv1偏置（`bias_mem[0:31]`）还是Conv2偏置（`bias2_mem[0:63]`）读取。
 
-| 配置模式 | Core Mask | 有效阵列规模 | 适用场景 |
-|----------|-----------|-------------|----------|
-| 全阵列 | 0xFF | 8×(16×16) | 大型网络 (ResNet) |
-| 半阵列 | 0x0F | 4×(16×16) | 中型网络 |
-| 四分之一 | 0x03 | 2×(16×16) | 小型网络 (LeNet) |
-| 单核 | 0x01 | 1×(16×16) | 极轻推理 |
+#### 3.2.7 40×32 MAC阵列组装
 
-动态切换由硬件自动管理：未被选中的Core在下一时钟周期被时钟门控切断时钟，其数据通路输入输出被隔离，避免干扰活跃Core的计算结果。
+`mac_array_40x32_stream`将80个`mm_systolic_4x4`子阵列组装为40行×32列的脉动阵列：
+
+```
+mac_array_40x32_stream
+├── Row Group 0 (rg=0): 处理行 0-3
+│   ├── mm_systolic_4x4 [0][0]: 列 0-3
+│   ├── mm_systolic_4x4 [0][1]: 列 4-7
+│   ├── ...
+│   └── mm_systolic_4x4 [0][7]: 列 28-31
+├── Row Group 1 (rg=1): 处理行 4-7
+│   └── ...
+├── ...
+└── Row Group 9 (rg=9): 处理行 36-39
+    └── ...
+```
+
+**数据广播模式**：
+- **A数据（激活）**：同一Row Group内所有Column Group共享相同的4个A值（320bit输入分解为40个8bit lane，每4个lane广播到一个Row Group）
+- **W数据（权重）**：同一Column Group内所有Row Group共享相同的4个W值（256bit/512bit权重行分解为32个8bit lane）
+
+**MAC控制FSM（`state_t`）：**
+
+| 状态 | 描述 |
+|------|------|
+| `S_IDLE` | 等待`start`，断言`flush`信号清零所有PE累加器 |
+| `S_FLUSH` | 1周期，等待flush传播完成 |
+| `S_FEED` | 向脉动阵列送入`active_dot_k`拍数据 |
+| `S_WAIT` | 等待8周期drain，然后捕获tile结果 |
+
+**权重选择逻辑**：
+- `layer_sel=0`：从`weight_buf[feed_count]`读取256bit（32通道权重）
+- `layer_sel=1`：从`weight2_buf[feed_count]`读取512bit，根据`out_pass`选择低256bit（通道0-31）或高256bit（通道32-63）
+
+```systemverilog
+w_lane[j] = layer_sel ?
+    $signed(weight2_buf[feed_count][W2_DW-1 - (out_pass*OUT_COLS+j)*8 -: 8]) :
+    $signed(weight_buf[feed_count][OUT_DW-1 - j*8 -: 8]);
+```
+
+**结果写回**：tile计算完成后，从`result_tile_buf`中提取40行结果（每行256bit=32通道×8bit），写入`result_ram`。地址计算：`(result_base_row + wr_row) * result_stride + result_offset`。Layer2使用`stride=2, offset=0/1`将64通道交替存放。
+
+#### 3.2.8 im2col变换
+
+im2col变换由`dmac_image_sa_writer`（控制状态机）和`dmac_im2col_stream`（组合逻辑变换核）两级模块实现。
+
+**DMAC控制状态机（`dmac_image_sa_writer`）：**
+
+| 状态 | 描述 |
+|------|------|
+| `S_IDLE` | 等待`start`，锁存`layer_sel`选择当前层配置 |
+| `S_RUN` | 发出请求：`row_base = (issue_addr / k_len) * 40`，`k_idx = issue_addr % k_len`，递增`issue_addr` |
+| `S_DRAIN` | 等待飞行中请求完成 |
+| `S_DONE` | 脉冲`done`，返回空闲 |
+
+**层配置参数：**
+
+| 参数 | Layer 1 | Layer 2 |
+|------|---------|---------|
+| IMG_ROWS | 1024 (32×32) | 256 (16×16) |
+| K_LEN | 75 (3×5×5) | 800 (32×5×5) |
+| IMG_W × IMG_H | 32 × 32 | 16 × 16 |
+| IMG_CH | 3 | 32 |
+| KERNEL | 5 | 5 |
+| PAD | 2 | 2 |
+| SA_ROWS | 1950 (⌈1024/40⌉×75) | 5600 (⌈256/40⌉×800) |
+
+**im2col组合逻辑（`get_lane_data`函数）**：
+
+对每个lane（0-39），给定`row_base`和`k_idx`，纯组合逻辑零延迟计算：
+
+```systemverilog
+row = row_base + lane;                    // 全局输出行索引
+oh  = row / cfg_in_w;                     // 输出H坐标
+ow  = row % cfg_in_w;                     // 输出W坐标
+ch  = k_idx / (cfg_kernel * cfg_kernel);  // 输入通道
+kh  = (k_idx % (cfg_kernel * cfg_kernel)) / cfg_kernel;
+kw  = k_idx % cfg_kernel;
+ih  = oh + kh - cfg_pad;                  // 输入H（含padding）
+iw  = ow + kw - cfg_pad;                  // 输入W（含padding）
+```
+
+- 越界检查：若`row >= in_w*in_h || ch >= in_ch || ih < 0 || ih >= in_h || iw < 0 || iw >= in_w`，返回0（零填充）
+- Layer 0：从24bit RGB像素提取通道（`pixel[23:16]`=R, `[15:8]`=G, `[7:0]`=B）
+- Layer 1：从256bit `pool_buf`字中提取对应通道（`pool_buf[ih*in_w+iw][(31-ch)*8 +: 8]`）
+
+**数据打包**：`pack_image_sa()`函数将40个lane打包为320bit行数据，执行字节反转使`data[319:312] = lane[0]`，`data[7:0] = lane[39]`。
+
+**图像加载FSM（`dmac_im2col_stream`内部）**：
+
+| 状态 | 描述 |
+|------|------|
+| `LD_IDLE` | 等待`load_start` |
+| `LD_READ` | 从`npu_ram`逐像素读取1024个24bit RGB像素（字节地址=`ld_idx << 2`），存入`image_buf` |
+| `LD_DONE` | 信号`load_done` |
+
+#### 3.2.9 流式MaxPool（`ppu_maxpool`）
+
+`ppu_maxpool`以流式方式拦截`result_ram`的写入数据，无需额外读取周期即可完成2×2 MaxPool降采样。
+
+**层配置参数：**
+
+| 参数 | Layer 1 | Layer 2 |
+|------|---------|---------|
+| IN_SIZE | 32 | 16 |
+| OUT_SIZE | 16 | 8 |
+| CHANNELS | 32 | 32（每pass） |
+| DATA_DW | 256 | 256 |
+
+**算法**：对每个`in_valid`拍数据（含`in_row_idx`）：
+
+```
+h_idx = in_row_idx / cfg_in_size
+w_idx = in_row_idx % cfg_in_size
+pool_h = h_idx >> 1
+pool_w = w_idx >> 1
+```
+
+- `w_idx[0]==0`（偶数列）：左像素，暂存到`left_pixel_buf`
+- `w_idx[0]==1 && h_idx[0]==0`（奇数列、偶数行）：计算`hmax = max(左像素, 当前像素)`，存入`row_max_buf[pool_w]`
+- `w_idx[0]==1 && h_idx[0]==1`（奇数列、奇数行）：计算`vmax = max(row_max_buf[pool_w], hmax)`，写入pool_ram
+
+**输出地址**：`pool_wr_addr = (pool_h * cfg_out_size + pool_w) * cfg_addr_stride + cfg_addr_offset`。Layer2使用`stride=2, offset=0/1`实现64通道的交替写入。
+
+**pool_buf回写**：池化结果同时写入`dmac_im2col_stream`内部的`pool_buf[0:255]`（256×256bit），供Layer2的im2col变换读取。
+
+#### 3.2.10 GAP + FC + argmax分类器（`gap_fc_logits`）
+
+**参数**：`CHANNELS=64`, `OUT_CLASSES=10`, `LANES=32`, `FC_SHIFT=7`
+
+**FSM状态（`state_t`）：**
+
+| 状态 | 描述 |
+|------|------|
+| `S_IDLE` | 等待`start`；将`gap_sum`量化为`gap_feat`（右移6位，饱和到INT8） |
+| `S_PREP_FC` | 初始化`fc_acc=0`, `class_idx=0` |
+| `S_MUL` | 64个并行乘法：`prod[lane] = gap_feat[lane] × fc_weight[class_idx*64+lane]` |
+| `S_ADD32` → `S_ADD1` | 6级树形归约：64→32→16→8→4→2→1 |
+| `S_WRITE` | `logit = sat_i8((sum >>> 7) + fc_bias[cls])`，更新argmax，推进`class_idx`或完成 |
+| `S_DONE` | 断言`done`，返回空闲 |
+
+**GAP被动累积**：在卷积阶段，每当`ppu_maxpool`写入pool_ram时（`stream_wr_en`有效），同时将32个有符号字节累加到`gap_sum[0:31]`或`gap_sum[32:63]`（由`stream_wr_addr[0]`决定）。这意味着GAP求和与Conv2计算并行完成，FC启动时仅需一次移位和饱和操作。
+
+**量化公式**：
+- GAP：`gap_feat[ch] = sat_i8(gap_sum[ch] >>> 6)`（除以64=8×8空间均值）
+- FC：`logit = sat_i8((dot_product >>> 7) + bias)`
+
+**argmax**：在`S_WRITE`状态中增量跟踪——每计算完一个类的logit，与当前最佳值比较。10类全部计算完成后输出`pred_valid`、`pred_class_id`、`pred_logit`。
+
+#### 3.2.11 NPU内部存储资源汇总
+
+| 存储 | 位宽 | 深度 | 总容量 | 位置 | 用途 |
+|------|------|------|--------|------|------|
+| `npu_ram` | 32bit | 4096B | 4KB | npu_top | DMA可访问的图像缓存（AXI4 Slave + 组合逻辑读口） |
+| `image_buf` | 24bit | 1024 | 3KB | dmac_im2col_stream | 原始RGB像素缓存 |
+| `pool_buf` | 256bit | 256 | 8KB | dmac_im2col_stream | 池化输出缓存（Layer2 im2col源） |
+| `image_sa_ram` | 320bit | 5600 | 224KB | conv_top | im2col矩阵存储 |
+| `result_ram` | 256bit | 1024 | 32KB | conv_top | 卷积结果存储 |
+| `pool_ram` | 256bit | 256 | 8KB | conv_top | MaxPool结果存储 |
+| `weight_buf` | 256bit | 75 | 2.4KB | mac_array | Conv1权重（32通道×75k_len） |
+| `weight2_buf` | 512bit | 800 | 50KB | mac_array | Conv2权重（64通道×800k_len） |
+| `bias_mem` | 8bit | 32 | 32B | mac_array | Conv1偏置 |
+| `bias2_mem` | 8bit | 64 | 64B | mac_array | Conv2偏置 |
+| `gap_sum` | 32bit | 64 | 256B | gap_fc_logits | GAP累加器 |
+| `gap_feat` | 8bit | 64 | 64B | gap_fc_logits | GAP量化特征 |
+| `fc_weight` | 8bit | 640 | 640B | gap_fc_logits | FC权重（10类×64通道） |
+| `fc_bias` | 8bit | 10 | 10B | gap_fc_logits | FC偏置 |
+| `logit_q` | 8bit | 10 | 10B | gap_fc_logits | 最终量化logit |
+| **总计** | | | **~328KB** | | |
+
+#### 3.2.12 NPU完整推理时序
+
+**Layer 1 推理：**
+
+```
+Phase 1: DMAC填充image_sa_ram
+  活动行数: ⌈1024/40⌉ × 75 = 1950 行
+  耗时: ~1950周期（每周期写1行）
+
+Phase 2: MAC计算（26个tile）
+  每tile:
+    - 从image_sa_ram读取75列 → 75周期
+    - 脉动阵列drain → 8周期
+    - 结果写回result_ram（40行）→ 40周期
+    - PPU并行处理（与写回重叠）
+  每tile耗时: 75 + 8 + 40 = 123周期
+  总计: 26 × 123 = 3198周期
+
+Layer 1总计: 1950 + 3198 ≈ 5148周期
+```
+
+**Layer 2 推理：**
+
+```
+Phase 1: DMAC填充image_sa_ram
+  活动行数: ⌈256/40⌉ × 800 = 5600 行
+  耗时: ~5600周期
+
+Phase 2: MAC计算（2 Pass × 7 Tile）
+  每tile:
+    - 读取800列 → 800周期
+    - drain → 8周期
+    - 写回40行 → 40周期
+  每tile: 848周期
+  总计: 2 × 7 × 848 = 11872周期
+
+Layer 2总计: 5600 + 11872 ≈ 17472周期
+```
+
+**FC推理：**
+
+```
+GAP: 0周期（与卷积并行累积）
+FC:  10类 × 8周期/类 + 状态机开销 ≈ 95周期
+```
+
+**总计：**
+
+```
+Layer 1:  ~5148周期
+Layer 2: ~17472周期
+FC:         ~95周期
+─────────────────────
+总计:     ~22715周期
+
+@200MHz → ~114 μs
+```
+
+#### 3.2.13 NPU数据流全景图
+
+```
+                     ┌──────────────────────────────────────────────────┐
+                     │              image_data.dat                      │
+                     │         (32×32×3 RGB, INT8)                      │
+                     └──────────────────────┬───────────────────────────┘
+                                            │ $fopen/$fscanf
+                                            ▼
+                     ┌──────────────────────────────────────────────────┐
+                     │              image_buf[0:1023]                   │
+                     │            (24bit/pixel, on-chip)                │
+                     └──────────────────────┬───────────────────────────┘
+                                            │ im2col (组合逻辑)
+                                            │ get_lane_data(lane)
+                                            ▼
+┌──────────────┐  ┌────────────────────────────────────────────────────┐
+│  conv1.dat   │─→│              image_sa_ram[0:5599]                  │
+│ (75×256bit)  │  │         (320bit/行 = 40lane × 8b)                  │
+└──────────────┘  └──────────────────────┬─────────────────────────────┘
+      │                                    │ 每周期读1行
+      │                                    ▼
+      │          ┌────────────────────────────────────────────────────┐
+      │          │          mac_array_40x32_stream                    │
+      ├─────────→│  ┌─────────────────────────────────┐              │
+      │          │  │  10×8 = 80 个 mm_systolic_4x4   │              │
+      │          │  │  每个含 16 PE (共 1280 MAC)      │              │
+      │          │  └─────────────────────────────────┘              │
+      │          │  + bias add + ReLU + quantize (sat_i8)            │
+      │          └──────────────────────┬─────────────────────────────┘
+      │                                  │
+      │                                  ▼
+      │          ┌────────────────────────────────────────────────────┐
+      │          │              result_ram[0:1023]                     │
+      │          │           (256bit/行 = 32ch × 8b)                   │
+      │          └──────────────────────┬─────────────────────────────┘
+      │                                  │ 流式写入（拦截）
+      │                                  ▼
+      │          ┌────────────────────────────────────────────────────┐
+      │          │              ppu_maxpool                            │
+      │          │           (2×2 MaxPool, stride=2)                   │
+      │          └──────────────────────┬─────────────────────────────┘
+      │                                  │
+      │                    ┌─────────────┴─────────────┐
+      │                    ▼                           ▼
+      │          ┌──────────────────┐    ┌──────────────────────────┐
+      │          │   pool_ram       │    │   pool_buf (im2col输入)   │
+      │          │  (256行×256bit)  │    │   → Layer 2 im2col 源    │
+      │          └──────────────────┘    └──────────────────────────┘
+      │
+      │                    Layer 2 重复上述流程 (conv2.dat 权重, 2 Pass)
+      │
+      │                                  │
+      │                                  ▼
+      │          ┌────────────────────────────────────────────────────┐
+      │          │              gap_fc_logits                          │
+      │          │  ┌──────────┐  ┌───────────┐  ┌───────────┐       │
+      │          │  │   GAP    │→│  FC 64→10  │→│  argmax   │       │
+      │          │  │ (被动累积)│  │ (8级树归约)│  │ (增量比较) │       │
+      │          │  └──────────┘  └───────────┘  └───────────┘       │
+      │          └────────────────────────────────────────────────────┘
+      │                                  │
+      │                                  ▼
+      │                        pred_class_id + pred_logit
+```
+
+#### 3.2.14 NPU设计特点总结
+
+1. **全文件预加载**：所有权重和图像数据在仿真开始时通过`$readmemh`/`$fopen`加载到片上存储，运行时无需外部访存。
+
+2. **组合逻辑im2col**：`dmac_im2col_stream`中的`get_lane_data()`为纯组合逻辑，零延迟完成地址计算和数据提取，不占用额外时钟周期。
+
+3. **权重驻留（Weight Stationary）**：权重在仿真开始时加载到`weight_buf`/`weight2_buf`，整个推理过程中保持不变，避免重复加载。
+
+4. **Tile化计算**：40行为一个tile，逐tile复用同一组权重，26个tile（Layer1）或7个tile×2 pass（Layer2）覆盖全部输出行。
+
+5. **流式MaxPool**：`ppu_maxpool`拦截`result_ram`写入数据，池化与结果写回并行执行，无需额外的读-处理-写回周期。
+
+6. **被动GAP累积**：GAP求和在池化写入过程中并行完成（`stream_wr_en`驱动`gap_sum`累加），FC启动时仅需一次`>>>6`移位和`sat_i8`饱和操作。
+
+7. **双Pass扩展**：通过`out_pass`信号将64通道卷积分为两次32通道计算，以有限阵列宽度（32列）支持更大输出通道数。
+
+8. **8级流水线树形归约FC**：FC层采用64→32→16→8→4→2→1的二叉树加法链，7级流水线完成64维向量点积，每类8周期（含状态机开销），10类共~95周期。
 
 ### 3.3 AXI共享总线互连（axicb_crossbar）
 
