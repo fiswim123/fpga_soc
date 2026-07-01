@@ -19,7 +19,7 @@ puts "SEED=$rnd_seed"
 
 vsim -t 1ps -L work +SEED=$rnd_seed -voptargs="+acc" soc_tb
 
-add wave -r /*
+source wave.do
 
 run -all
 
